@@ -36,6 +36,7 @@ stages:
   # Extra data pipeline stages (Axially format)
   prep_extra_data:
     # Prepare extra tracking data from Axially format
+    # Add --drive-dir /content/drive/MyDrive/prepped_data_extra when running in Colab for caching
     cmd: uv run python src/prep_extra_data.py
     deps:
     - src/prep_extra_data.py

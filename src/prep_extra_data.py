@@ -18,12 +18,25 @@ Output:
     - {train,val,test}_targets.parquet: Yards gained labels
 """
 
+import argparse
+import shutil
 from pathlib import Path
 
 import polars as pl
 
 INPUT_DATA_DIR = Path("extra_data/")
 OUTPUT_DATA_DIR = Path("data/split_prepped_data_extra/")
+DRIVE_DIR: Path | None = None  # Google Drive directory for caching (optional)
+
+# Expected output files
+OUTPUT_FILES = [
+    "train_features.parquet",
+    "train_targets.parquet",
+    "test_features.parquet",
+    "test_targets.parquet",
+    "val_features.parquet",
+    "val_targets.parquet",
+]
 
 
 def load_extra_data() -> pl.DataFrame:
@@ -436,8 +449,70 @@ def split_train_test_val(tracking_df: pl.DataFrame, target_df: pl.DataFrame) -> 
     }
 
 
-def main():
+def _check_drive_cache() -> bool:
+    """Check if all output files exist in Google Drive cache."""
+    if DRIVE_DIR is None:
+        return False
+
+    for filename in OUTPUT_FILES:
+        drive_path = DRIVE_DIR / filename
+        if not drive_path.exists():
+            return False
+
+    return True
+
+
+def _load_from_drive() -> bool:
+    """
+    Load all output files from Google Drive cache.
+
+    Returns True if successfully loaded from Drive, False otherwise.
+    """
+    if not _check_drive_cache():
+        return False
+
+    print(f"Found cached data in Drive: {DRIVE_DIR}")
+    OUTPUT_DATA_DIR.mkdir(exist_ok=True, parents=True)
+
+    for filename in OUTPUT_FILES:
+        drive_path = DRIVE_DIR / filename
+        local_path = OUTPUT_DATA_DIR / filename
+        print(f"Copying {drive_path} -> {local_path}")
+        shutil.copy2(drive_path, local_path)
+
+    return True
+
+
+def _save_to_drive():
+    """Save all output files to Google Drive for caching."""
+    if DRIVE_DIR is None:
+        return
+
+    print(f"\nSaving to Drive: {DRIVE_DIR}")
+    DRIVE_DIR.mkdir(exist_ok=True, parents=True)
+
+    for filename in OUTPUT_FILES:
+        local_path = OUTPUT_DATA_DIR / filename
+        drive_path = DRIVE_DIR / filename
+        if local_path.exists():
+            print(f"Copying {local_path} -> {drive_path}")
+            shutil.copy2(local_path, drive_path)
+
+
+def main(output_dir: Path = OUTPUT_DATA_DIR, drive_dir: Path | None = None):
     """Main execution function for extra data preparation."""
+    global OUTPUT_DATA_DIR, DRIVE_DIR
+    OUTPUT_DATA_DIR = output_dir
+    DRIVE_DIR = drive_dir
+
+    if DRIVE_DIR is not None:
+        print(f"Google Drive caching enabled: {DRIVE_DIR}")
+
+        # Check if all files exist in Drive cache
+        if _load_from_drive():
+            print("All files loaded from Drive cache, skipping computation")
+            return
+
     print("Loading extra data...")
     df = load_extra_data()
     print(f"Loaded {len(df)} rows")
@@ -480,6 +555,24 @@ def main():
         split_df.sort(sort_keys).write_parquet(out_path)
         print(f"Saved {out_path}")
 
+    # Save to Drive for future runs
+    _save_to_drive()
+
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Prepare extra tracking data")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=OUTPUT_DATA_DIR,
+        help="Directory to output preprocessed parquet files",
+    )
+    parser.add_argument(
+        "--drive-dir",
+        type=Path,
+        default=None,
+        help="Google Drive directory for caching (e.g., /content/drive/MyDrive/prepped_data_extra)",
+    )
+    args = parser.parse_args()
+
+    main(output_dir=args.output_dir, drive_dir=args.drive_dir)
