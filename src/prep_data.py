@@ -1,7 +1,7 @@
 """
 Data Preparation Module for NFL Big Data Bowl 2024
 
-This module implements the complete data preprocessing pipeline for tackle prediction.
+This module implements the complete data preprocessing pipeline for yards gained prediction.
 The pipeline transforms raw NFL tracking data (player positions, velocities, orientations)
 into ML-ready features while handling several key challenges:
 
@@ -33,14 +33,14 @@ Functions:
     standardize_tracking_directions: Standardize play directions
     augment_mirror_tracking: Augment data by mirroring the field
     add_relative_positions: Add relative position features
-    get_tackle_loc_target_df: Generate target dataframe for tackle location prediction
+    get_yards_gained_target_df: Generate target dataframe for yards gained prediction
     split_train_test_val: Split data into train, validation, and test sets
     main: Main execution function
 
 Output:
     Creates 6 files in data/split_prepped_data/:
     - {train,val,test}_features.parquet: Input features for models
-    - {train,val,test}_targets.parquet: Tackle location labels
+    - {train,val,test}_targets.parquet: Yards gained labels (scalar + class index)
 """
 
 from pathlib import Path
@@ -128,7 +128,7 @@ def add_features_to_tracking_df(
                 "down",
                 "yardsToGo",
                 "distanceToGoal",
-                "playResult",
+                "prePenaltyPlayResult",
             ),
             on=["gameId", "playId"],
             how="inner",
@@ -231,75 +231,82 @@ def augment_mirror_tracking(tracking_df: pl.DataFrame) -> pl.DataFrame:
     return tracking_df
 
 
-def get_tackle_loc_target_df(tracking_df: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
+def get_yards_gained_target_df(tracking_df: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     """
-    Generate target dataframe for tackle location prediction.
+    Generate target dataframe for yards gained prediction.
+
+    The target is the prePenaltyPlayResult field (yards gained on the play), converted to:
+    - yards_gained: The raw yards gained value (for regression/expected value)
+    - yards_gained_class: Class index for probability distribution (0-109 for -10 to +99 yards)
 
     Args:
         tracking_df (pl.DataFrame): Tracking data
 
     Returns:
-        tuple: tuple containing tackle location target dataframe and filtered tracking data.
+        tuple: tuple containing yards gained target dataframe and filtered tracking data.
     """
-    # generate per-play target dataframe
-    TACKLE_EVENTS = ["tackle", "out_of_bounds", "touchdown", "qb_slide", "fumble"]
+    # Yards gained classification bins: -10 to +99 yards (110 classes)
+    # Class 0 = -10 yards, Class 109 = +99 yards
+    # Formula: class = clamp(yards + 10, 0, 109)
+    MIN_YARDS = -10
+    MAX_YARDS = 99
+    NUM_CLASSES = MAX_YARDS - MIN_YARDS + 1  # 110 classes
 
-    # get the tackle location for each play as the ball carrier's location at the frame of the tackle
-    play_tackle_loc_df = (
-        tracking_df.sort("frameId")
-        .filter(pl.col("event").is_in(TACKLE_EVENTS) & (pl.col("is_ball_carrier") == 1))
-        .group_by(["gameId", "playId", "mirrored"])
-        .tail(1)
-        .select(
-            [
-                "gameId",
-                "playId",
-                "mirrored",
-                "nflId",
-                "displayName",
-                "frameId",
-                "event",
-                "x",
-                "y",
-                "playResult",
-            ]
-        )
-        .rename(
-            {
-                "nflId": "ballCarrierNflId",
-                "displayName": "ballCarrierName",
-                "frameId": "tackle_frameId",
-                "event": "tackle_event",
-                "x": "tackle_x",
-                "y": "tackle_y",
-            }
-        )
+    # Filter to plays that have a definitive end event
+    END_EVENTS = ["tackle", "out_of_bounds", "touchdown", "qb_slide", "fumble"]
+
+    # Get plays with valid end events
+    plays_with_end = (
+        tracking_df.filter(pl.col("event").is_in(END_EVENTS))
+        .select(["gameId", "playId", "mirrored", "prePenaltyPlayResult"])
+        .unique()
     )
 
-    # we need to convert into relative coordinates which involves comparing against the
-    # anchor point which is per frame
-    tackle_loc_df = (
-        play_tackle_loc_df.join(
-            tracking_df.select(["gameId", "playId", "mirrored", "frameId", "anchor_x", "anchor_y"]).unique(),
+    # Filter out plays with null prePenaltyPlayResult
+    plays_with_end = plays_with_end.filter(pl.col("prePenaltyPlayResult").is_not_null())
+
+    # Create target dataframe with one row per (gameId, playId, mirrored, frameId)
+    # yards_gained is the same for all frames in a play
+    target_df = (
+        tracking_df.select(["gameId", "playId", "mirrored", "frameId"])
+        .unique()
+        .join(
+            plays_with_end,
             on=["gameId", "playId", "mirrored"],
             how="inner",
-        ).with_columns(
-            tackle_x_rel=pl.col("tackle_x") - pl.col("anchor_x"),
-            tackle_y_rel=pl.col("tackle_y") - pl.col("anchor_y"),
         )
-        # .drop(["anchor_x", "anchor_y"])
+        .with_columns(
+            yards_gained=pl.col("prePenaltyPlayResult").cast(pl.Float32),
+        )
+        .with_columns(
+            # Clamp yards to valid range and compute class index
+            yards_gained_class=(
+                pl.col("yards_gained")
+                .clip(MIN_YARDS, MAX_YARDS)
+                .cast(pl.Int32) - MIN_YARDS
+            ).cast(pl.Int64),
+        )
+        .drop("prePenaltyPlayResult")
     )
 
-    # only keep plays in dataset that have a valid tackle location target
+    # Only keep plays in dataset that have a valid target
     og_play_count = len(tracking_df.select(["gameId", "playId"]).unique())
     tracking_df = tracking_df.join(
-        tackle_loc_df.select(["gameId", "playId", "mirrored"]).unique(),
+        target_df.select(["gameId", "playId", "mirrored"]).unique(),
         on=["gameId", "playId", "mirrored"],
         how="inner",
     )
     new_play_count = len(tracking_df.select(["gameId", "playId"]).unique())
-    print(f"Lost {(og_play_count - new_play_count) / og_play_count:.3%} plays when joining with tackle_loc_df")
-    return tackle_loc_df, tracking_df
+    print(f"Lost {(og_play_count - new_play_count) / og_play_count:.3%} plays when filtering for valid targets")
+
+    # Print distribution stats
+    unique_targets = target_df.select(["gameId", "playId", "mirrored", "yards_gained"]).unique()
+    print(f"Yards gained stats: min={unique_targets['yards_gained'].min():.0f}, "
+          f"max={unique_targets['yards_gained'].max():.0f}, "
+          f"mean={unique_targets['yards_gained'].mean():.1f}, "
+          f"median={unique_targets['yards_gained'].median():.1f}")
+
+    return target_df, tracking_df
 
 
 def split_train_test_val(tracking_df: pl.DataFrame, target_df: pl.DataFrame) -> dict[str, pl.DataFrame]:
@@ -316,7 +323,7 @@ def split_train_test_val(tracking_df: pl.DataFrame, target_df: pl.DataFrame) -> 
         dict: Dictionary containing train, validation, and test dataframes.
     """
     tracking_df = tracking_df.sort(["gameId", "playId", "mirrored", "frameId"])
-    target_df = target_df.sort(["gameId", "playId", "mirrored"])
+    target_df = target_df.sort(["gameId", "playId", "mirrored", "frameId"])
 
     print(
         f"Total set: {tracking_df.n_unique(['gameId', 'playId', 'mirrored'])} plays,",
@@ -407,9 +414,9 @@ def main():
 
     rel_tracking_df = add_relative_positions(tracking_df)
 
-    tkl_loc_tgt_df, rel_tracking_df = get_tackle_loc_target_df(rel_tracking_df)
+    yards_gained_tgt_df, rel_tracking_df = get_yards_gained_target_df(rel_tracking_df)
 
-    split_dfs = split_train_test_val(rel_tracking_df, tkl_loc_tgt_df)
+    split_dfs = split_train_test_val(rel_tracking_df, yards_gained_tgt_df)
 
     out_dir = Path("data/split_prepped_data/")
     out_dir.mkdir(exist_ok=True, parents=True)

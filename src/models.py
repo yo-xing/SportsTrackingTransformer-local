@@ -1,9 +1,14 @@
 """
-Model Architectures for NFL Big Data Bowl 2024 tackle prediction task
+Model Architectures for NFL Big Data Bowl 2024 yards gained prediction task
 
-This module defines neural network architectures for predicting tackle
-locations in NFL plays. It includes two main model types: SportsTransformer and
-TheZooArchitecture, along with a shared LightningModule wrapper for training.
+This module defines neural network architectures for predicting yards gained
+as a probability distribution over possible outcomes (-10 to +99 yards).
+It includes two main model types: SportsTransformer and TheZooArchitecture,
+along with a shared LightningModule wrapper for training.
+
+The models output logits for 110 classes (one per yard from -10 to +99),
+which are converted to probabilities via softmax. Expected yards can be
+computed as the weighted sum of yard values by their probabilities.
 
 Classes:
     SportsTransformer: Generalized Transformer-based model for sports tracking data
@@ -18,12 +23,15 @@ from lightning import LightningModule
 from torch import Tensor, nn, squeeze
 from torch.optim import AdamW
 
+from datasets import MIN_YARDS, NUM_YARDS_CLASSES
+
 torch.set_float32_matmul_precision("medium")
 
 
 class SportsTransformer(nn.Module):
     """
-    Transformer model that treats all 22 players as a sequence for tackle prediction.
+    Transformer model that treats all 22 players as a sequence for yards gained prediction.
+    Outputs a probability distribution over yards gained (-10 to +99).
     """
 
     def __init__(
@@ -87,21 +95,16 @@ class SportsTransformer(nn.Module):
         # We pool because this task is a single value across all players, you don't need to pool for all tasks.
         self.player_pooling_layer = nn.AdaptiveAvgPool1d(1)
 
-        # Task-specific Decoder to predict tackle location.
-        # self.decoder = nn.Sequential(
-        #     nn.Linear(model_dim, model_dim // 4),
-        #     nn.ReLU(),
-        #     nn.Linear(model_dim // 4, 2),
-        # )
-
+        # Task-specific Decoder to predict yards gained distribution.
+        # Output is logits for NUM_YARDS_CLASSES classes (110 classes for -10 to +99 yards)
         self.decoder = nn.Sequential(
             nn.Linear(model_dim, model_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(model_dim, model_dim // 4),
+            nn.Linear(model_dim, model_dim // 2),
             nn.ReLU(),
-            nn.LayerNorm(model_dim // 4),
-            nn.Linear(model_dim // 4, 2),
+            nn.LayerNorm(model_dim // 2),
+            nn.Linear(model_dim // 2, NUM_YARDS_CLASSES),
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -112,7 +115,7 @@ class SportsTransformer(nn.Module):
             x (Tensor): Input tensor of shape [batch_size, num_players, feature_len].
 
         Returns:
-            Tensor: Predicted tackle location of shape [batch_size, 2].
+            Tensor: Logits for yards gained distribution of shape [batch_size, NUM_YARDS_CLASSES].
         """
         # x: [B: batch_size, P: # of players, F: feature_len]
         B, P, F = x.size()
@@ -129,8 +132,8 @@ class SportsTransformer(nn.Module):
         # Pool over player dimension
         x = squeeze(self.player_pooling_layer(x.permute(0, 2, 1)), -1)  # [B,M,P] -> [B,M]
 
-        # Decode to predict tackle location
-        x = self.decoder(x)  # [B,M] -> [B,2]
+        # Decode to predict yards gained distribution
+        x = self.decoder(x)  # [B,M] -> [B, NUM_YARDS_CLASSES]
 
         return x
 
@@ -142,6 +145,8 @@ class TheZooArchitecture(nn.Module):
     innovative (at the time) approach to solving player-equivariance problem. At a high level, the approach requires
     generating a set of pairwise interaction vectors between offense (10) and defense (11) players, applying feedforward layers to each
     interaction embedding independently, and then pooling across interaction dimensions to get to a final output.
+
+    Outputs a probability distribution over yards gained (-10 to +99).
 
     Based on: https://github.com/juancamilocampos/nfl-big-data-bowl-2020/blob/master/1st_place_zoo_solution_v2.ipynb
     """
@@ -207,6 +212,7 @@ class TheZooArchitecture(nn.Module):
                 for _ in range(num_layers)
             ]
         )
+        # Output layer predicts yards gained distribution (110 classes for -10 to +99 yards)
         self.output_layer = nn.Sequential(
             *(
                 [
@@ -219,10 +225,10 @@ class TheZooArchitecture(nn.Module):
                 ]
                 + [
                     nn.Dropout(dropout),
-                    nn.Linear(model_dim, model_dim // 4),
+                    nn.Linear(model_dim, model_dim // 2),
                     nn.ReLU(),
-                    nn.LayerNorm(model_dim // 4),
-                    nn.Linear(model_dim // 4, 2),
+                    nn.LayerNorm(model_dim // 2),
+                    nn.Linear(model_dim // 2, NUM_YARDS_CLASSES),
                 ]
             )
         )
@@ -242,7 +248,7 @@ class TheZooArchitecture(nn.Module):
             x (Tensor): Input tensor of shape [B, O, D, F].
 
         Returns:
-            Tensor: Output tensor of shape [B, 2].
+            Tensor: Logits for yards gained distribution of shape [B, NUM_YARDS_CLASSES].
         """
         # x: [B: batch_size, O: offense, D: defense, F: feature_len]
         B, O, D, F = x.size()  # B=Batch, O=Offense, D=Defense, F=Feature
@@ -263,15 +269,15 @@ class TheZooArchitecture(nn.Module):
         x = self.pool_defense_max(x) * 0.3 + self.pool_defense_avg(x) * 0.7  # [B,M,D] -> [B,M,1]
         x = x.squeeze(-1)  # [B,M,1] -> [B,M]
 
-        # apply decoder
-        x = self.output_layer(x)  # [B,M] -> [B,2]
-        assert x.shape == (B, 2)
+        # apply decoder to get yards gained distribution logits
+        x = self.output_layer(x)  # [B,M] -> [B, NUM_YARDS_CLASSES]
         return x
 
 
 class LitModel(LightningModule):
     """
-    Lightning module for training and evaluating tackle prediction models.
+    Lightning module for training and evaluating yards gained prediction models.
+    Uses CrossEntropyLoss for the probability distribution over yards gained.
     """
 
     def __init__(
@@ -319,7 +325,8 @@ class LitModel(LightningModule):
             self.hparams[k] = v
 
         self.save_hyperparameters()
-        self.loss_fn = torch.nn.SmoothL1Loss()
+        # CrossEntropyLoss for classification over NUM_YARDS_CLASSES bins
+        self.loss_fn = torch.nn.CrossEntropyLoss()
 
     def forward(self, x: Tensor) -> Tensor:
         """
@@ -338,15 +345,15 @@ class LitModel(LightningModule):
         Perform a single training step.
 
         Args:
-            batch (tuple[Tensor, Tensor]): Batch of input features and target locations.
+            batch (tuple[Tensor, Tensor]): Batch of input features and target class indices.
             batch_idx (int): Index of the current batch.
 
         Returns:
-            Tensor: Computed loss for the batch.
+            Tensor: Computed cross-entropy loss for the batch.
         """
         x, y = batch
-        y_hat = self.model(x)
-        loss = self.loss_fn(y_hat, y)
+        y_hat = self.model(x)  # [B, NUM_YARDS_CLASSES]
+        loss = self.loss_fn(y_hat, y)  # y is [B] of class indices
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         return loss
 
@@ -355,15 +362,15 @@ class LitModel(LightningModule):
         Validation step for the model.
 
         Args:
-            batch (tuple[Tensor, Tensor]): Batch of input and target tensors.
+            batch (tuple[Tensor, Tensor]): Batch of input features and target class indices.
             batch_idx (int): Index of the current batch.
 
         Returns:
-            Tensor: Computed loss.
+            Tensor: Computed cross-entropy loss.
         """
         x, y = batch
-        y_hat = self.model(x)
-        loss = self.loss_fn(y_hat, y)
+        y_hat = self.model(x)  # [B, NUM_YARDS_CLASSES]
+        loss = self.loss_fn(y_hat, y)  # y is [B] of class indices
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         return loss
 
@@ -372,15 +379,15 @@ class LitModel(LightningModule):
         Test step for the model.
 
         Args:
-            batch (tuple[Tensor, Tensor]): Batch of input and target tensors.
+            batch (tuple[Tensor, Tensor]): Batch of input features and target class indices.
             batch_idx (int): Index of the current batch.
 
         Returns:
-            Tensor: Computed loss.
+            Tensor: Computed cross-entropy loss.
         """
         x, y = batch
-        y_hat = self.model(x)
-        loss = self.loss_fn(y_hat, y)
+        y_hat = self.model(x)  # [B, NUM_YARDS_CLASSES]
+        loss = self.loss_fn(y_hat, y)  # y is [B] of class indices
         return loss
 
     def predict_step(self, batch: tuple[Tensor, Tensor], batch_idx: int, dataloader_idx: int = 0) -> Tensor:
@@ -388,15 +395,15 @@ class LitModel(LightningModule):
         Prediction step for the model.
 
         Args:
-            batch (tuple[Tensor, Tensor]): Batch of input and target tensors.
+            batch (tuple[Tensor, Tensor]): Batch of input features and target class indices.
             batch_idx (int): Index of the current batch.
             dataloader_idx (int): Index of the dataloader.
 
         Returns:
-            Tensor: Predicted output tensor.
+            Tensor: Logits for yards gained distribution of shape [B, NUM_YARDS_CLASSES].
         """
         x, y = batch
-        y_hat = self.model(x)
+        y_hat = self.model(x)  # [B, NUM_YARDS_CLASSES]
         return y_hat
 
     def configure_optimizers(self) -> AdamW:

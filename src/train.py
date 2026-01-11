@@ -1,7 +1,7 @@
 """
-Training Script for NFL Big Data Bowl 2024 Tackle Prediction Models
+Training Script for NFL Big Data Bowl 2024 Yards Gained Prediction Models
 
-This module handles the training process for tackle prediction models. It includes
+This module handles the training process for yards gained prediction models. It includes
 functions for loading datasets, predicting using trained models, and conducting
 hyperparameter searches.
 
@@ -29,11 +29,21 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from datasets import BDB2024_Dataset, load_datasets
+from datasets import BDB2024_Dataset, load_datasets, MIN_YARDS, NUM_YARDS_CLASSES, PREPPED_DATA_DIR
 from models import LitModel
 
-MODELS_PATH = Path("models")
-MODELS_PATH.mkdir(exist_ok=True)
+# Use Google Drive for checkpoints if available (Colab), otherwise local
+GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models")
+LOCAL_MODELS_PATH = Path("models")
+
+if GDRIVE_MODELS_PATH.parent.exists():
+    MODELS_PATH = GDRIVE_MODELS_PATH
+    print(f"Using Google Drive for checkpoints: {MODELS_PATH}")
+else:
+    MODELS_PATH = LOCAL_MODELS_PATH
+    print(f"Using local path for checkpoints: {MODELS_PATH}")
+
+MODELS_PATH.mkdir(exist_ok=True, parents=True)
 
 # Set random seeds for reproducibility
 torch.manual_seed(42)
@@ -79,19 +89,29 @@ def predict_model_as_df(model: LitModel = None, ckpt_path: Path = None, devices=
         "test": DataLoader(test_ds, batch_size=1024, shuffle=False, num_workers=10),
     }
 
+    # Yard values for computing expected yards from probability distribution
+    yard_values = np.arange(MIN_YARDS, MIN_YARDS + NUM_YARDS_CLASSES, dtype=np.float32)
+
     pred_dfs = []
     for split, dataloader in dataloaders.items():
-        # Generate predictions
+        # Generate predictions (logits)
         pred_trainer = Trainer(devices=devices, logger=False, enable_model_summary=False)
         preds = pred_trainer.predict(model, dataloaders=dataloader, ckpt_path=ckpt_path)
-        preds: np.ndarray = torch.concat(preds, dim=0).cpu().numpy()
+        logits: np.ndarray = torch.concat(preds, dim=0).cpu().numpy()
 
-        # Prepare metadata
+        # Convert logits to probabilities and compute expected yards
+        probs = np.exp(logits - logits.max(axis=1, keepdims=True))  # softmax with numerical stability
+        probs = probs / probs.sum(axis=1, keepdims=True)
+        expected_yards = (probs * yard_values).sum(axis=1)
+        predicted_class = logits.argmax(axis=1)
+
+        # Prepare metadata - load target data from parquet since tgt_df_partition is cleared
+        tgt_df = pl.read_parquet(PREPPED_DATA_DIR / f"{split}_targets.parquet")
+
         dataset: BDB2024_Dataset = dataloader.dataset
-        tgt_df = pl.from_pandas(dataset.tgt_df_partition, include_index=True)
         ds_keys = np.array(dataset.keys)
 
-        assert preds.shape[0] == ds_keys.shape[0], f"Pred Shape: {preds.shape}, Keys Shape: {ds_keys.shape}"
+        assert logits.shape[0] == ds_keys.shape[0], f"Pred Shape: {logits.shape}, Keys Shape: {ds_keys.shape}"
 
         # Create prediction DataFrame
         pred_df = (
@@ -103,19 +123,13 @@ def predict_model_as_df(model: LitModel = None, ckpt_path: Path = None, devices=
                         "mirrored": ds_keys[:, 2],
                         "frameId": ds_keys[:, 3],
                         "dataset_split": split,
-                        "tackle_x_rel_pred": preds[:, 0].round(2),
-                        "tackle_y_rel_pred": preds[:, 1].round(2),
+                        "expected_yards": expected_yards.round(2),
+                        "predicted_class": predicted_class,
                     },
                     schema_overrides={"mirrored": bool},
                 ),
                 on=["gameId", "playId", "mirrored", "frameId"],
                 how="inner",
-            )
-            .with_columns(
-                tackle_x_rel_pred=pl.col("tackle_x_rel_pred").round(2),
-                tackle_y_rel_pred=pl.col("tackle_y_rel_pred").round(2),
-                tackle_x_pred=(pl.col("tackle_x_rel_pred") + pl.col("anchor_x")).round(2),
-                tackle_y_pred=(pl.col("tackle_y_rel_pred") + pl.col("anchor_y")).round(2),
             )
             # add model hparams to pred df
             .with_columns(**{k: pl.lit(v) for k, v in model.hparams.items()})
