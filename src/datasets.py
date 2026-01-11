@@ -27,6 +27,7 @@ random.seed(42)
 # Default directories (can be overridden via CLI)
 PREPPED_DATA_DIR = Path("data/split_prepped_data/")
 DATASET_DIR = Path("data/datasets/")
+DRIVE_DIR: Path | None = None  # Google Drive directory for caching (optional)
 
 # Yards gained classification constants
 # Class 0 = -10 yards, Class 109 = +99 yards
@@ -262,33 +263,115 @@ def _read_targets(split: str) -> pl.DataFrame:
     return df
 
 
-def main(prepped_data_dir: Path = PREPPED_DATA_DIR, dataset_dir: Path = DATASET_DIR):
+def _get_drive_path(model_type: str, split: str) -> Path | None:
+    """Get the Google Drive path for a dataset file, if Drive is configured."""
+    if DRIVE_DIR is None:
+        return None
+    return DRIVE_DIR / model_type / f"{split}_dataset.pkl"
+
+
+def _load_from_drive(model_type: str, split: str, local_path: Path) -> bool:
+    """
+    Try to load dataset from Google Drive cache.
+
+    Returns True if successfully loaded from Drive, False otherwise.
+    """
+    drive_path = _get_drive_path(model_type, split)
+    if drive_path is None or not drive_path.exists():
+        return False
+
+    print(f"Found cached dataset in Drive: {drive_path}")
+    print(f"Copying to local: {local_path}")
+
+    # Ensure local directory exists
+    local_path.parent.mkdir(exist_ok=True, parents=True)
+
+    # Copy from Drive to local
+    import shutil
+    shutil.copy2(drive_path, local_path)
+
+    return True
+
+
+def _save_to_drive(local_path: Path, model_type: str, split: str):
+    """Save dataset to Google Drive for caching."""
+    drive_path = _get_drive_path(model_type, split)
+    if drive_path is None:
+        return
+
+    print(f"Saving to Drive: {drive_path}")
+
+    # Ensure Drive directory exists
+    drive_path.parent.mkdir(exist_ok=True, parents=True)
+
+    # Copy from local to Drive
+    import shutil
+    shutil.copy2(local_path, drive_path)
+
+
+def main(
+    prepped_data_dir: Path = PREPPED_DATA_DIR,
+    dataset_dir: Path = DATASET_DIR,
+    drive_dir: Path | None = None,
+):
     """
     Main execution function for dataset creation.
 
     Args:
         prepped_data_dir: Directory containing preprocessed parquet files
         dataset_dir: Directory to output dataset pickle files
+        drive_dir: Optional Google Drive directory for caching datasets
     """
-    global PREPPED_DATA_DIR, DATASET_DIR
+    global PREPPED_DATA_DIR, DATASET_DIR, DRIVE_DIR
     PREPPED_DATA_DIR = prepped_data_dir
     DATASET_DIR = dataset_dir
+    DRIVE_DIR = drive_dir
+
+    if DRIVE_DIR is not None:
+        print(f"Google Drive caching enabled: {DRIVE_DIR}")
 
     for split in ["test", "val", "train"]:
+        # Check if all model types for this split are cached
+        all_cached = True
+        for model_type in ["zoo", "transformer"]:
+            out_dir = DATASET_DIR / model_type
+            out_dir.mkdir(exist_ok=True, parents=True)
+            local_path = out_dir / f"{split}_dataset.pkl"
+
+            # Try to load from Drive cache
+            if _load_from_drive(model_type, split, local_path):
+                print(f"Loaded {model_type}/{split} from Drive cache")
+            else:
+                all_cached = False
+
+        if all_cached:
+            print(f"All datasets for {split} loaded from cache, skipping computation")
+            continue
+
+        # Need to compute - load the data
         feature_df = _read_features(split)
         tgt_df = _read_targets(split)
 
         for model_type in ["zoo", "transformer"]:
+            out_dir = DATASET_DIR / model_type
+            local_path = out_dir / f"{split}_dataset.pkl"
+
+            # Skip if already loaded from cache
+            if local_path.exists():
+                print(f"Skipping {model_type}/{split} - already loaded from cache")
+                continue
+
             print(f"Creating dataset for {model_type=}, {split=}...")
             tic = time.time()
 
             dataset = BDB2024_Dataset(model_type, feature_df, tgt_df)
 
-            out_dir = DATASET_DIR / model_type
-            out_dir.mkdir(exist_ok=True, parents=True)
-
-            with open(out_dir / f"{split}_dataset.pkl", "wb") as f:
+            # Save locally
+            with open(local_path, "wb") as f:
                 pickle.dump(dataset, f)
+
+            # Save to Drive for future runs
+            _save_to_drive(local_path, model_type, split)
 
             print(f"Took {(time.time() - tic)/60:.1f} mins")
 
@@ -318,6 +401,16 @@ if __name__ == "__main__":
         default=DATASET_DIR,
         help="Directory to output dataset pickle files",
     )
+    parser.add_argument(
+        "--drive-dir",
+        type=Path,
+        default=None,
+        help="Google Drive directory for caching datasets (e.g., /content/drive/MyDrive/datasets)",
+    )
     args = parser.parse_args()
 
-    main(prepped_data_dir=args.prepped_data_dir, dataset_dir=args.dataset_dir)
+    main(
+        prepped_data_dir=args.prepped_data_dir,
+        dataset_dir=args.dataset_dir,
+        drive_dir=args.drive_dir,
+    )

@@ -45,6 +45,7 @@ stages:
 
   precompute_extra_datasets:
     # Pre-compute feature transforms for extra data
+    # Add --drive-dir /content/drive/MyDrive/datasets_extra when running in Colab for caching
     cmd: uv run python src/datasets.py --prepped-data-dir data/split_prepped_data_extra --dataset-dir data/datasets_extra
     deps:
     - src/datasets.py
