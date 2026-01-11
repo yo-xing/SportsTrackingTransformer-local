@@ -33,6 +33,26 @@ stages:
     - data/datasets/:
         persist: true
 
+  # Extra data pipeline stages (Axially format)
+  prep_extra_data:
+    # Prepare extra tracking data from Axially format
+    cmd: uv run python src/prep_extra_data.py
+    deps:
+    - src/prep_extra_data.py
+    - extra_data/
+    outs:
+    - data/split_prepped_data_extra/
+
+  precompute_extra_datasets:
+    # Pre-compute feature transforms for extra data
+    cmd: uv run python src/datasets.py --prepped-data-dir data/split_prepped_data_extra --dataset-dir data/datasets_extra
+    deps:
+    - src/datasets.py
+    - data/split_prepped_data_extra/
+    outs:
+    - data/datasets_extra/:
+        persist: true
+
   train_zoo_models:
     # Train 12 zoo models (M32/M128/M512 × L1/L2/L4/L8)
     # Total: ~4-6 hours on GPU with --skip-existing flag (skips if checkpoints exist)

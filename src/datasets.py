@@ -6,6 +6,7 @@ The target is a probability distribution over yards gained (-10 to +99 yards),
 represented as a class index (0-109) for cross-entropy loss.
 """
 
+import argparse
 import gc
 import multiprocessing as mp
 import pickle
@@ -23,6 +24,7 @@ from tqdm import tqdm
 np.random.seed(42)
 random.seed(42)
 
+# Default directories (can be overridden via CLI)
 PREPPED_DATA_DIR = Path("data/split_prepped_data/")
 DATASET_DIR = Path("data/datasets/")
 
@@ -260,7 +262,18 @@ def _read_targets(split: str) -> pl.DataFrame:
     return df
 
 
-def main():
+def main(prepped_data_dir: Path = PREPPED_DATA_DIR, dataset_dir: Path = DATASET_DIR):
+    """
+    Main execution function for dataset creation.
+
+    Args:
+        prepped_data_dir: Directory containing preprocessed parquet files
+        dataset_dir: Directory to output dataset pickle files
+    """
+    global PREPPED_DATA_DIR, DATASET_DIR
+    PREPPED_DATA_DIR = prepped_data_dir
+    DATASET_DIR = dataset_dir
+
     for split in ["test", "val", "train"]:
         feature_df = _read_features(split)
         tgt_df = _read_targets(split)
@@ -292,4 +305,19 @@ if __name__ == "__main__":
     except RuntimeError:
         pass
 
-    main()
+    parser = argparse.ArgumentParser(description="Create datasets for model training")
+    parser.add_argument(
+        "--prepped-data-dir",
+        type=Path,
+        default=PREPPED_DATA_DIR,
+        help="Directory containing preprocessed parquet files",
+    )
+    parser.add_argument(
+        "--dataset-dir",
+        type=Path,
+        default=DATASET_DIR,
+        help="Directory to output dataset pickle files",
+    )
+    args = parser.parse_args()
+
+    main(prepped_data_dir=args.prepped_data_dir, dataset_dir=args.dataset_dir)
