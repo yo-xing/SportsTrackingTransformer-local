@@ -26,7 +26,7 @@ import polars as pl
 
 INPUT_DATA_DIR = Path("extra_data/")
 OUTPUT_DATA_DIR = Path("data/split_prepped_data_extra/")
-DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache") # Google Drive directory for caching (optional)
+DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache") # Google Drive directory for caching (optional)
 
 # Expected output files
 OUTPUT_FILES = [
