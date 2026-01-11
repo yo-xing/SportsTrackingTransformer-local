@@ -25,8 +25,8 @@ np.random.seed(42)
 random.seed(42)
 
 # Default directories (can be overridden via CLI)
-PREPPED_DATA_DIR = Path("data/split_prepped_data/")
-DATASET_DIR = Path("data/datasets/")
+PREPPED_DATA_DIR = Path("data/split_prepped_data_extra/")
+DATASET_DIR = Path("data/datasets_extra/")
 DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache") # Google Drive directory for caching (optional)
 
 # Yards gained classification constants

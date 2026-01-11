@@ -64,7 +64,7 @@ stages:
     - src/train.py
     - src/datasets.py
     - src/models.py
-    - data/datasets/zoo/
+    - data/datasets_extra/zoo/
     outs:
     - models/zoo/:
         persist: true
@@ -79,7 +79,7 @@ stages:
     - src/train.py
     - src/datasets.py
     - src/models.py
-    - data/datasets/transformer
+    - data/datasets_extra/transformer
     outs:
     - models/transformer/:
         persist: true
@@ -108,7 +108,7 @@ stages:
     - src/generate_results_summary.py
     - src/models.py
     - models/best_models/
-    - data/split_prepped_data/
+    - data/split_prepped_data_extra/
     outs:
     - results/results.csv:
         cache: false
