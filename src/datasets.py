@@ -27,7 +27,7 @@ random.seed(42)
 # Default directories (can be overridden via CLI)
 PREPPED_DATA_DIR = Path("data/split_prepped_data/")
 DATASET_DIR = Path("data/datasets/")
-DRIVE_DIR: Path | None = None  # Google Drive directory for caching (optional)
+DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache") # Google Drive directory for caching (optional)
 
 # Yards gained classification constants
 # Class 0 = -10 yards, Class 109 = +99 yards
@@ -404,7 +404,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--drive-dir",
         type=Path,
-        default=None,
+        default=DRIVE_DIR,
         help="Google Drive directory for caching datasets (e.g., /content/drive/MyDrive/datasets)",
     )
     args = parser.parse_args()
