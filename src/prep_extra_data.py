@@ -24,7 +24,7 @@ from pathlib import Path
 
 import polars as pl
 
-INPUT_DATA_DIR = Path("extra_data/")
+INPUT_DATA_DIR = Path("/content/drive/MyDrive/NGS/NFL/REG/")
 OUTPUT_DATA_DIR = Path("data/split_prepped_data_extra/")
 DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache") # Google Drive directory for caching (optional)
 
@@ -42,16 +42,21 @@ OUTPUT_FILES = [
 def load_extra_data() -> pl.DataFrame:
     """
     Load all parquet files from extra_data directory structure.
-    Expected structure: extra_data/Week XX/*.parquet
+    Expected structure: /content/drive/MyDrive/NGS/NFL/REG/Week XX/*.parquet
+
+    Skips *_mirror.parquet files since we do our own mirroring.
 
     Returns:
         pl.DataFrame: Combined tracking data from all weeks.
     """
-    parquet_files = list(INPUT_DATA_DIR.glob("Week*/*.parquet"))
+    parquet_files = [
+        f for f in INPUT_DATA_DIR.glob("Week*/*.parquet")
+        if "_mirror" not in f.name
+    ]
     if not parquet_files:
         raise FileNotFoundError(f"No parquet files found in {INPUT_DATA_DIR}/Week*/")
 
-    print(f"Found {len(parquet_files)} parquet files")
+    print(f"Found {len(parquet_files)} parquet files (excluding _mirror files)")
 
     dfs = []
     for f in parquet_files:
