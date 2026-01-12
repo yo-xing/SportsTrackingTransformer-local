@@ -178,9 +178,11 @@ class BDB2024_Dataset(Dataset):
                 # Use first offensive player
                 ball_carrier = frame_df[frame_df["side"] == 1].head(1)
 
-            # Get other offensive players (excluding the reference player)
-            off_plyrs = frame_df[(frame_df["side"] == 1) & (frame_df.index != ball_carrier.index[0])]
+            # For plays without ball carrier, include ALL offensive players (don't exclude reference)
+            # This maintains the expected shape of 10 offensive players
+            off_plyrs = frame_df[frame_df["side"] == 1]
         else:
+            # For plays with ball carrier, exclude the ball carrier from offensive players
             off_plyrs = frame_df[(frame_df["side"] == 1) & (frame_df["is_ball_carrier"] == 0)]
 
         def_plyrs = frame_df[frame_df["side"] == -1]
