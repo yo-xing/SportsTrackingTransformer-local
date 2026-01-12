@@ -409,10 +409,26 @@ def add_relative_positions(df: pl.DataFrame) -> pl.DataFrame:
         .alias("anchor_y"),
     ]).drop(["ball_anchor_x", "ball_anchor_y"])
 
-    return df_with_anchor.with_columns(
+    df_with_rel = df_with_anchor.with_columns(
         x_rel=pl.col("x") - pl.col("anchor_x"),
         y_rel=pl.col("y") - pl.col("anchor_y"),
     )
+
+    # Filter out any rows with null values in critical columns
+    df_clean = df_with_rel.filter(
+        pl.col("x").is_not_null() &
+        pl.col("y").is_not_null() &
+        pl.col("vx").is_not_null() &
+        pl.col("vy").is_not_null() &
+        pl.col("x_rel").is_not_null() &
+        pl.col("y_rel").is_not_null()
+    )
+
+    num_null_rows = len(df_with_rel) - len(df_clean)
+    if num_null_rows > 0:
+        print(f"Filtered out {num_null_rows} rows with null position/velocity values")
+
+    return df_clean
 
 
 def filter_complete_plays(df: pl.DataFrame) -> pl.DataFrame:
