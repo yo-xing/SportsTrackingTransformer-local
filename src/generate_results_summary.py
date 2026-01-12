@@ -5,8 +5,8 @@ This module performs comprehensive analysis of trained model performance, genera
 publication-ready figures, tables, and metrics for comparing different architectures.
 
 Key Analyses:
-1. Overall Performance Comparison: Calculates Average Displacement Error (ADE) across
-   all data splits for each model architecture.
+1. Overall Performance Comparison: Calculates Mean Absolute Error (MAE) for yards
+   gained prediction across all data splits for each model architecture.
 
 2. Event-Type Breakdown: Analyzes model performance at different game moments
    (snap, handoff, tackle, etc.) to understand where models excel or struggle.
@@ -43,63 +43,75 @@ from calflops import calculate_flops
 from models import LitModel
 
 
-def calculate_ade(
-    x: pl.Series | np.ndarray,
-    y: pl.Series | np.ndarray,
-    x_pred: pl.Series | np.ndarray,
-    y_pred: pl.Series | np.ndarray,
-) -> float:
-    """
-    Calculate Average Displacement Error (ADE).
-
-    ADE = mean Euclidean distance between predicted and true (x, y) locations.
-    Standard metric for trajectory prediction, pose estimation, and spatial tasks.
-
-    Formula: mean(sqrt((x_pred - x)² + (y_pred - y)²))
-
-    Args:
-        x: True x coordinates
-        y: True y coordinates
-        x_pred: Predicted x coordinates
-        y_pred: Predicted y coordinates
-
-    Returns:
-        Average displacement error in the same units as input coordinates (yards)
-    """
-    if isinstance(x, pl.Series):
-        x = x.to_numpy()
-    if isinstance(y, pl.Series):
-        y = y.to_numpy()
-    if isinstance(x_pred, pl.Series):
-        x_pred = x_pred.to_numpy()
-    if isinstance(y_pred, pl.Series):
-        y_pred = y_pred.to_numpy()
-
-    distances = np.sqrt((x_pred - x) ** 2 + (y_pred - y) ** 2)
-    return float(np.mean(distances))
-
-
 RESULTS_DIR = Path("results")
 RESULTS_DIR.mkdir(exist_ok=True)
 
-MODELS_DIR = Path("models/best_models")
+# Use Google Drive for models if available (Colab), otherwise local
+GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models")
+LOCAL_MODELS_PATH = Path("models")
+
+if GDRIVE_MODELS_PATH.parent.exists():
+    MODELS_BASE_DIR = GDRIVE_MODELS_PATH
+    print(f"Using Google Drive for models: {MODELS_BASE_DIR}")
+else:
+    MODELS_BASE_DIR = LOCAL_MODELS_PATH
+    print(f"Using local path for models: {MODELS_BASE_DIR}")
+
+MODELS_DIR = MODELS_BASE_DIR / "best_models"
 ZOO_RESULTS = MODELS_DIR / "zoo" / "best_model_results.parquet"
 TRANSFORMER_RESULTS = MODELS_DIR / "transformer" / "best_model_results.parquet"
 ZOO_CHECKPOINT = MODELS_DIR / "zoo" / "best_model.ckpt"
 TRANSFORMER_CHECKPOINT = MODELS_DIR / "transformer" / "best_model.ckpt"
 
+# Use extra data paths
+PREPPED_DATA_DIR = Path("data/split_prepped_data_extra")
+
+
+def generate_results_if_missing(checkpoint_path: Path, results_path: Path, model_type: str):
+    """Generate predictions for a model if results file doesn't exist."""
+    if results_path.exists():
+        return
+
+    print(f"Results file missing for {model_type}, generating predictions...")
+
+    from train import predict_model_as_df
+
+    # Generate predictions
+    preds_df = predict_model_as_df(ckpt_path=checkpoint_path, devices=[0])
+
+    # Save results
+    results_path.parent.mkdir(parents=True, exist_ok=True)
+    preds_df.write_parquet(results_path, compression="zstd", compression_level=22)
+    print(f"Saved results to {results_path}")
+
 
 def load_results() -> pl.DataFrame:
     """Load and combine results from both models, including per-frame events from tracking data."""
+    # Generate results if missing
+    if ZOO_CHECKPOINT.exists():
+        generate_results_if_missing(ZOO_CHECKPOINT, ZOO_RESULTS, "zoo")
+    if TRANSFORMER_CHECKPOINT.exists():
+        generate_results_if_missing(TRANSFORMER_CHECKPOINT, TRANSFORMER_RESULTS, "transformer")
+
     print("Loading model results...")
-    results_df = pl.concat(
-        [pl.read_parquet(ZOO_RESULTS), pl.read_parquet(TRANSFORMER_RESULTS)],
-        how="diagonal",
-    )
+    results_dfs = []
+    if ZOO_RESULTS.exists():
+        results_dfs.append(pl.read_parquet(ZOO_RESULTS))
+    else:
+        print("Warning: Zoo results not found, skipping")
+    if TRANSFORMER_RESULTS.exists():
+        results_dfs.append(pl.read_parquet(TRANSFORMER_RESULTS))
+    else:
+        print("Warning: Transformer results not found, skipping")
+
+    if not results_dfs:
+        raise FileNotFoundError("No results files found. Please train models first.")
+
+    results_df = pl.concat(results_dfs, how="diagonal")
 
     # Load tracking data to get per-frame events
     print("Loading tracking data for per-frame events...")
-    tracking_df = pl.read_parquet("data/split_prepped_data/*_features.parquet")
+    tracking_df = pl.read_parquet(f"{PREPPED_DATA_DIR}/*_features.parquet")
 
     # Join with tracking data to get per-frame events
     results_df = results_df.join(
@@ -126,24 +138,20 @@ def load_results() -> pl.DataFrame:
     return results_df
 
 
-def _calculate_ade_for_df(df: pl.DataFrame) -> float:
+def _calculate_mae_for_df(df: pl.DataFrame) -> float:
     """
-    Helper to calculate ADE from a DataFrame with prediction columns.
+    Helper to calculate MAE (Mean Absolute Error) for yards gained prediction.
 
     Args:
-        df: DataFrame with columns: tackle_x, tackle_y, tackle_x_pred, tackle_y_pred
+        df: DataFrame with columns: yards_gained, expected_yards
 
     Returns:
-        ADE in yards, rounded to 2 decimal places
+        MAE in yards, rounded to 2 decimal places
     """
-    ade = df.select(
-        pl.map_groups(
-            exprs=["tackle_x", "tackle_y", "tackle_x_pred", "tackle_y_pred"],
-            function=lambda ls: calculate_ade(*ls),
-            returns_scalar=True,
-        )
+    mae = df.select(
+        (pl.col("yards_gained") - pl.col("expected_yards")).abs().mean()
     ).item()
-    return round(ade, 2)
+    return round(mae, 2)
 
 
 def _calculate_improvement_metrics(zoo_ade: float, transformer_ade: float) -> tuple[float, float]:
@@ -174,11 +182,11 @@ def calculate_results(results_df: pl.DataFrame) -> list[dict]:
     for split in ["train", "val", "test"]:
         split_df = results_df.filter(pl.col("dataset_split") == split)
 
-        row = {"split": split, "metric": "ade_yards"}
+        row = {"split": split, "metric": "mae_yards"}
 
         for model_type in ["zoo", "transformer"]:
             model_df = split_df.filter(pl.col("model_type") == model_type)
-            row[model_type] = _calculate_ade_for_df(model_df)
+            row[model_type] = _calculate_mae_for_df(model_df)
 
         row["improvement_pct"], row["improvement_yards"] = _calculate_improvement_metrics(
             row["zoo"], row["transformer"]
@@ -203,11 +211,11 @@ def calculate_results(results_df: pl.DataFrame) -> list[dict]:
         if n_plays < 100:
             continue
 
-        row = {"split": f"test-event-{event}", "metric": "ade_yards"}
+        row = {"split": f"test-event-{event}", "metric": "mae_yards"}
 
         for model_type in ["zoo", "transformer"]:
             model_df = event_df.filter(pl.col("model_type") == model_type)
-            row[model_type] = _calculate_ade_for_df(model_df)
+            row[model_type] = _calculate_mae_for_df(model_df)
 
         row["improvement_pct"], row["improvement_yards"] = _calculate_improvement_metrics(
             row["zoo"], row["transformer"]
@@ -236,6 +244,11 @@ def calculate_frame_difference_results(results_df: pl.DataFrame) -> tuple[list[d
     """
     print("\nCalculating frame-difference breakdown (test set only)...")
 
+    # Check if tackle_frameId exists - skip if not available
+    if "tackle_frameId" not in results_df.columns:
+        print("  Skipping: tackle_frameId column not available in data")
+        return [], pl.DataFrame()
+
     frame_diff_df = (
         results_df.with_columns(
             frame_difference_from_tackle=(pl.col("tackle_frameId") - pl.col("frameId")),
@@ -255,11 +268,7 @@ def calculate_frame_difference_results(results_df: pl.DataFrame) -> tuple[list[d
             order=pl.col("frame_difference_from_tackle").mean() * -1,
             n_frames=pl.len(),
             n_plays=pl.struct(["gameId", "playId"]).n_unique(),
-            ade_yards=pl.map_groups(
-                exprs=["tackle_x", "tackle_y", "tackle_x_pred", "tackle_y_pred"],
-                function=lambda ls: round(calculate_ade(*ls), 2),
-                returns_scalar=True,
-            ),
+            mae_yards=(pl.col("yards_gained") - pl.col("expected_yards")).abs().mean().round(2),
         )
         .sort("frame_difference_from_tackle_cat")
     )
@@ -271,12 +280,12 @@ def calculate_frame_difference_results(results_df: pl.DataFrame) -> tuple[list[d
     for category in categories:
         cat_df = frame_diff_df.filter(pl.col("frame_difference_from_tackle_cat") == category)
 
-        row = {"split": f"test-frames-before-tackle-{category}", "metric": "ade_yards"}
+        row = {"split": f"test-frames-before-tackle-{category}", "metric": "mae_yards"}
 
         for model_type in ["zoo", "transformer"]:
             model_data = cat_df.filter(pl.col("model_type") == model_type)
             if len(model_data) > 0:
-                row[model_type] = model_data["ade_yards"].item()
+                row[model_type] = model_data["mae_yards"].item()
 
         if "zoo" in row and "transformer" in row:
             row["improvement_pct"], row["improvement_yards"] = _calculate_improvement_metrics(
@@ -297,6 +306,21 @@ def generate_frame_difference_plot(frame_diff_df: pl.DataFrame) -> None:
     """Generate and save frame-difference plot."""
     print("\nGenerating frame-difference plot...")
 
+    plot_path = RESULTS_DIR / "frame_difference_plot.png"
+
+    # Create placeholder plot if no data
+    if len(frame_diff_df) == 0:
+        print("  Creating placeholder: no frame-difference data available")
+        plt.figure(figsize=(12, 6))
+        plt.text(0.5, 0.5, "No frame-difference data available\n(tackle_frameId column not present)",
+                 ha='center', va='center', fontsize=14, transform=plt.gca().transAxes)
+        plt.title("Model Performance by Frames Before Tackle", fontsize=16)
+        plt.tight_layout()
+        plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+        plt.close()
+        print(f"  Saved placeholder: {plot_path}")
+        return
+
     # Convert to pandas for plotting
     frame_diff_df_pandas = frame_diff_df.to_pandas()
 
@@ -305,7 +329,7 @@ def generate_frame_difference_plot(frame_diff_df: pl.DataFrame) -> None:
     sns.lineplot(
         data=frame_diff_df_pandas,
         x="frame_difference_from_tackle_cat",
-        y="ade_yards",
+        y="mae_yards",
         hue="model_type",
         marker="o",
     )
@@ -316,13 +340,12 @@ def generate_frame_difference_plot(frame_diff_df: pl.DataFrame) -> None:
     # Customize the plot
     plt.title("Model Performance by Frames Before Tackle", fontsize=16)
     plt.xlabel("Frames Before Tackle", fontsize=12)
-    plt.ylabel("Average Displacement Error (yards)", fontsize=12)
+    plt.ylabel("Mean Absolute Error (yards)", fontsize=12)
     plt.xticks(rotation=45, ha="right")
     plt.legend(title="Model Type", title_fontsize="12", fontsize="10")
 
     # Adjust layout and save
     plt.tight_layout()
-    plot_path = RESULTS_DIR / "frame_difference_plot.png"
     plt.savefig(plot_path, dpi=300, bbox_inches="tight")
     plt.close()
 
@@ -440,28 +463,24 @@ def compute_model_metrics(checkpoint_path: str, model_type: str) -> dict:
     return {"params": params, "inference_flops": inference_flops}
 
 
-def compute_test_ade(results_path: str) -> float:
+def compute_test_mae(results_path: str) -> float:
     """
-    Compute test set ADE from results parquet file.
+    Compute test set MAE from results parquet file.
 
     Args:
         results_path (str): Path to results parquet file.
 
     Returns:
-        float: Test set ADE in yards.
+        float: Test set MAE in yards.
     """
     df = pl.read_parquet(results_path)
     test_df = df.filter((pl.col("dataset_split") == "test") & (pl.col("mirrored") == False))
 
-    ade = test_df.select(
-        pl.map_groups(
-            exprs=["tackle_x", "tackle_y", "tackle_x_pred", "tackle_y_pred"],
-            function=lambda ls: calculate_ade(*ls),
-            returns_scalar=True,
-        )
+    mae = test_df.select(
+        (pl.col("yards_gained") - pl.col("expected_yards")).abs().mean()
     ).item()
 
-    return float(ade)
+    return float(mae)
 
 
 def compute_model_comparison() -> list[dict]:
@@ -487,7 +506,7 @@ def compute_model_comparison() -> list[dict]:
 
         # Compute metrics
         metrics = compute_model_metrics(config["checkpoint_path"], config["model_type"])
-        test_ade = compute_test_ade(config["results_path"])
+        test_mae = compute_test_mae(config["results_path"])
 
         results.append(
             {
@@ -496,7 +515,7 @@ def compute_model_comparison() -> list[dict]:
                 "num_layers": config["num_layers"],
                 "params": metrics["params"],
                 "inference_flops": metrics["inference_flops"],
-                "test_ade_yards": round(test_ade, 2),
+                "test_mae_yards": round(test_mae, 2),
                 "val_loss": round(config["val_loss"], 3),
             }
         )
@@ -532,7 +551,7 @@ def generate_model_scaling_plot(model_comparison: list[dict]) -> None:
         data = df[df["model_type"] == model_type].sort_values("inference_flops")
         ax.plot(
             data["inference_flops"],
-            data["test_ade_yards"],
+            data["test_mae_yards"],
             marker=markers[model_type],
             markersize=8,
             linewidth=2,
@@ -543,8 +562,8 @@ def generate_model_scaling_plot(model_comparison: list[dict]) -> None:
 
     ax.set_xscale("log")
     ax.set_xlabel("Inference FLOPs (log scale)", fontsize=12)
-    ax.set_ylabel("Test ADE (yards) - Lower is Better", fontsize=12)
-    ax.set_title("Model Scaling: Test ADE vs FLOPs", fontsize=14, fontweight="bold")
+    ax.set_ylabel("Test MAE (yards) - Lower is Better", fontsize=12)
+    ax.set_title("Model Scaling: Test MAE vs FLOPs", fontsize=14, fontweight="bold")
     ax.legend(title="Architecture", fontsize=11, title_fontsize=12)
     ax.grid(True, alpha=0.3, linestyle="--")
 
