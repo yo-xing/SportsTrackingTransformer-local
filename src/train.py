@@ -264,8 +264,9 @@ def train_model(
     # Create dataloaders with optimized settings
     # Training: smaller batch size, shuffled for better generalization
     # Validation: larger batch size (1024), no shuffle for consistent evaluation
-    train_dataloader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=30)
-    val_dataloader = DataLoader(val_ds, batch_size=1024, shuffle=False, pin_memory=True, num_workers=30)
+    # Use fewer workers (4) to avoid OOM on Colab with limited RAM
+    train_dataloader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=4)
+    val_dataloader = DataLoader(val_ds, batch_size=1024, shuffle=False, pin_memory=True, num_workers=4)
 
     # Set up devices
     devices = [device] if device >= 0 else [0, 1]  # if device is specified, use it, otherwise pick 1 gpu to use
