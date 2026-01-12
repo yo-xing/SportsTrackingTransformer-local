@@ -35,6 +35,17 @@ from shutil import copy
 
 from train import get_epoch_val_loss_from_ckpt
 
+# Use Google Drive for models if available (Colab), otherwise local
+GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models")
+LOCAL_MODELS_PATH = Path("models")
+
+if GDRIVE_MODELS_PATH.parent.exists():
+    MODELS_PATH = GDRIVE_MODELS_PATH
+    print(f"Using Google Drive for models: {MODELS_PATH}")
+else:
+    MODELS_PATH = LOCAL_MODELS_PATH
+    print(f"Using local path for models: {MODELS_PATH}")
+
 
 def find_best_checkpoint(root_dir: Path) -> dict[str, Path]:
     """
@@ -77,9 +88,9 @@ def main(args):
     This function finds the best checkpoints for each model type, copies them
     to a designated directory, and renames them for consistency.
     """
-    # Set up directories
-    root_dir = Path("models")
-    out_root_dir = Path("models/best_models")
+    # Set up directories - use MODELS_PATH which handles Colab/local automatically
+    root_dir = MODELS_PATH
+    out_root_dir = MODELS_PATH / "best_models"
 
     # Find best checkpoints
     best_checkpoints = find_best_checkpoint(root_dir)
@@ -98,12 +109,15 @@ def main(args):
             best_model_out_path.unlink()
         copy(checkpoint_path, best_model_out_path)
 
-        # Copy associated results file
+        # Copy associated results file if it exists
         results_df_path = checkpoint_path.with_suffix(".results.parquet")
         best_model_results_path = out_dir / "best_model_results.parquet"
-        if best_model_results_path.exists():
-            best_model_results_path.unlink()
-        copy(results_df_path, best_model_results_path)
+        if results_df_path.exists():
+            if best_model_results_path.exists():
+                best_model_results_path.unlink()
+            copy(results_df_path, best_model_results_path)
+        else:
+            print(f"  Warning: Results file not found: {results_df_path}")
 
 
 if __name__ == "__main__":

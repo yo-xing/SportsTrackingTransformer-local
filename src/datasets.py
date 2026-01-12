@@ -186,6 +186,14 @@ class BDB2024_Dataset(Dataset):
         return x
 
 
+class _DatasetUnpickler(pickle.Unpickler):
+    """Custom unpickler that remaps __main__.BDB2024_Dataset to datasets.BDB2024_Dataset."""
+    def find_class(self, module, name):
+        if module == "__main__" and name == "BDB2024_Dataset":
+            return BDB2024_Dataset
+        return super().find_class(module, name)
+
+
 def load_datasets(model_type: str, split: str) -> BDB2024_Dataset:
     ds_dir = DATASET_DIR / model_type
     file_path = ds_dir / f"{split}_dataset.pkl"
@@ -194,7 +202,7 @@ def load_datasets(model_type: str, split: str) -> BDB2024_Dataset:
         raise FileNotFoundError(f"Dataset file not found: {file_path}")
 
     with open(file_path, "rb") as f:
-        return pickle.load(f)
+        return _DatasetUnpickler(f).load()
 
 
 def _read_features(split: str) -> pl.DataFrame:

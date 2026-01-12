@@ -32,146 +32,183 @@ stages:
       nfiles: 13
     - path: src/prep_data.py
       hash: md5
-      md5: dfec4dae85894179eac4f0d77f8aa571
-      size: 15796
+      md5: 1d2d5d92803772c7e697997e930d0cd3
+      size: 16431
     outs:
     - path: data/split_prepped_data/
       hash: md5
-      md5: 4b678a6cef636cd4b359ab7498186897.dir
-      size: 1023797370
+      md5: 82d9dcdd0337e44d906985f5963e005a.dir
+      size: 1022926064
       nfiles: 6
   precompute_datasets:
     cmd: uv run python src/datasets.py
     deps:
     - path: data/split_prepped_data/
       hash: md5
-      md5: 4b678a6cef636cd4b359ab7498186897.dir
-      size: 1023797370
+      md5: 82d9dcdd0337e44d906985f5963e005a.dir
+      size: 1022926064
       nfiles: 6
     - path: src/datasets.py
       hash: md5
-      md5: 9793656630b2820635c6bbccb1657c57
-      size: 13278
+      md5: b6d4c4935b96479260f6f32d6b402537
+      size: 14635
     outs:
     - path: data/datasets/
       hash: md5
-      md5: f053ab8cf0248fbbfa7a73b50eb65759.dir
-      size: 20102260403
-      nfiles: 7
+      md5: ccdecdb19208b4604308e605fa2a6c6e.dir
+      size: 65174796
+      nfiles: 6
   train_zoo_models:
     cmd: uv run python src/train.py --model_type zoo --device 0 --skip-existing
     deps:
     - path: data/datasets/zoo/
       hash: md5
-      md5: 7842d5520da4ceaa82c3c1c3af88f19b.dir
-      size: 12952180128
-      nfiles: 4
+      md5: ae97818d3048a342a30058d152c1ec1a.dir
+      size: 57186715
+      nfiles: 3
     - path: src/datasets.py
       hash: md5
-      md5: 9793656630b2820635c6bbccb1657c57
-      size: 13278
+      md5: b6d4c4935b96479260f6f32d6b402537
+      size: 14635
     - path: src/models.py
       hash: md5
-      md5: f13901ccf658c2686b486482f8c76b10
-      size: 14850
+      md5: 6684890b46d981863b92a39707e7ad92
+      size: 15984
     - path: src/train.py
       hash: md5
-      md5: ebe74f1c36af2bbb350358b02f95089e
-      size: 14142
+      md5: 9da0818dceceddf40714575d317f3c52
+      size: 14836
     outs:
     - path: models/zoo/
       hash: md5
-      md5: a9d8934fe55f3aee21a62a2f1b433d9d.dir
-      size: 508918843
-      nfiles: 53
+      md5: 0f6fac67d8da9ca6cfc02801bcc7d048.dir
+      size: 138496702
+      nfiles: 48
   train_transformer_models:
     cmd: uv run python src/train.py --model_type transformer --device 0 --skip-existing
     deps:
     - path: data/datasets/transformer
       hash: md5
-      md5: 60b1b27e7f6d146e203ac16f9180b800.dir
-      size: 7150080275
+      md5: 519e10188d9f2f237857c9851b686fe5.dir
+      size: 7988081
       nfiles: 3
     - path: src/datasets.py
       hash: md5
-      md5: 9793656630b2820635c6bbccb1657c57
-      size: 13278
+      md5: b6d4c4935b96479260f6f32d6b402537
+      size: 14635
     - path: src/models.py
       hash: md5
-      md5: f13901ccf658c2686b486482f8c76b10
-      size: 14850
+      md5: 6684890b46d981863b92a39707e7ad92
+      size: 15984
     - path: src/train.py
       hash: md5
-      md5: ebe74f1c36af2bbb350358b02f95089e
-      size: 14142
+      md5: 9da0818dceceddf40714575d317f3c52
+      size: 14836
     outs:
     - path: models/transformer/
       hash: md5
-      md5: 623269871625227e50144941aec266dc.dir
-      size: 968130989
-      nfiles: 51
+      md5: 1388dbfc6b510c338946b58e89334b12.dir
+      size: 629048267
+      nfiles: 48
   pick_best_models:
     cmd: uv run python src/pick_best_models.py
     deps:
     - path: models/transformer/
       hash: md5
-      md5: 623269871625227e50144941aec266dc.dir
-      size: 968130989
-      nfiles: 51
+      md5: 1388dbfc6b510c338946b58e89334b12.dir
+      size: 629048267
+      nfiles: 48
     - path: models/zoo/
       hash: md5
-      md5: a9d8934fe55f3aee21a62a2f1b433d9d.dir
-      size: 508918843
-      nfiles: 53
+      md5: 0f6fac67d8da9ca6cfc02801bcc7d048.dir
+      size: 138496702
+      nfiles: 48
     - path: src/datasets.py
       hash: md5
-      md5: 9793656630b2820635c6bbccb1657c57
-      size: 13278
+      md5: b6d4c4935b96479260f6f32d6b402537
+      size: 14635
     - path: src/models.py
       hash: md5
-      md5: f13901ccf658c2686b486482f8c76b10
-      size: 14850
+      md5: 6684890b46d981863b92a39707e7ad92
+      size: 15984
     - path: src/pick_best_models.py
       hash: md5
-      md5: ec023e86ed7616c3380cde9481f37366
-      size: 4198
+      md5: 32f31e7fd5b742a6e3e32626c5e0263f
+      size: 4829
     outs:
     - path: models/best_models/
       hash: md5
-      md5: 13bc0e7f8a38d88ee7198fa6ffa8b1da.dir
-      size: 143347889
-      nfiles: 4
+      md5: 5ec93dafad10e0ce45cc8045f57dea24.dir
+      size: 353321
+      nfiles: 3
   generate_results:
     cmd: uv run python src/generate_results_summary.py
     deps:
     - path: data/split_prepped_data/
       hash: md5
-      md5: 4b678a6cef636cd4b359ab7498186897.dir
-      size: 1023797370
+      md5: 82d9dcdd0337e44d906985f5963e005a.dir
+      size: 1022926064
       nfiles: 6
     - path: models/best_models/
       hash: md5
-      md5: 13bc0e7f8a38d88ee7198fa6ffa8b1da.dir
-      size: 143347889
+      md5: 46c66a324d84da0d71f2cdfcb85917b1.dir
+      size: 389168
       nfiles: 4
     - path: src/generate_results_summary.py
       hash: md5
-      md5: 5402da569a23b04cad032e7b573b51fa
-      size: 21639
+      md5: 426fccf4b6776308112070ac5a1bd88d
+      size: 22870
     - path: src/models.py
       hash: md5
-      md5: f13901ccf658c2686b486482f8c76b10
-      size: 14850
+      md5: 6684890b46d981863b92a39707e7ad92
+      size: 15984
     outs:
     - path: results/frame_difference_plot.png
       hash: md5
-      md5: be11963e5aff6f21df352cb509cb57ab
-      size: 230966
+      md5: 960b4834ebfc593a3ab2e0d8bf749af8
+      size: 114797
     - path: results/model_comparison.json
       hash: md5
-      md5: 8f22e860ebb4f797e9017f6bc35df503
-      size: 4255
+      md5: 36130fa2c9fe10200fdaab39c451e8d0
+      size: 3922
     - path: results/results.csv
       hash: md5
-      md5: 560a8d2d96a82d5a14856d867004db69
-      size: 1284
+      md5: c52e19d0c691ae7a57aad213a0d3f681
+      size: 214
+  prep_extra_data:
+    cmd: uv run python src/prep_extra_data.py
+    deps:
+    - path: extra_data/
+      hash: md5
+      md5: 9b598e4efde559a10680ab12d856acfd.dir
+      size: 4090546
+      nfiles: 2
+    - path: src/prep_extra_data.py
+      hash: md5
+      md5: 4b75b2c7c3007751453b61de0f3d7210
+      size: 19409
+    outs:
+    - path: data/split_prepped_data_extra/
+      hash: md5
+      md5: 0228bd49040d23816cc3bb8423dc8569.dir
+      size: 9770665
+      nfiles: 6
+  precompute_extra_datasets:
+    cmd: uv run python src/datasets.py --prepped-data-dir data/split_prepped_data_extra
+      --dataset-dir data/datasets_extra
+    deps:
+    - path: data/split_prepped_data_extra/
+      hash: md5
+      md5: 0228bd49040d23816cc3bb8423dc8569.dir
+      size: 9770665
+      nfiles: 6
+    - path: src/datasets.py
+      hash: md5
+      md5: b6d4c4935b96479260f6f32d6b402537
+      size: 14635
+    outs:
+    - path: data/datasets_extra/
+      hash: md5
+      md5: ccdecdb19208b4604308e605fa2a6c6e.dir
+      size: 65174796
+      nfiles: 6
