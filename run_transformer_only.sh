@@ -9,9 +9,9 @@ echo "Transformer-Only Training Pipeline"
 echo "========================================="
 echo ""
 
-# Stage 1: Prepare extra data
-echo "Stage 1/3: Preparing extra data..."
-uv run dvc repro prep_extra_data
+# Stage 1: Prepare extra data (with all 18 weeks)
+echo "Stage 1/3: Preparing extra data (18 weeks)..."
+uv run python src/prep_extra_data.py --weeks 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18
 echo "✓ Data preparation complete"
 echo ""
 

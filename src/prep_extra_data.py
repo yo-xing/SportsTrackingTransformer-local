@@ -609,11 +609,16 @@ def _save_to_drive():
             shutil.copy2(local_path, drive_path)
 
 
-def main(output_dir: Path = OUTPUT_DATA_DIR, drive_dir: Path | None = None):
+def main(output_dir: Path = OUTPUT_DATA_DIR, drive_dir: Path | None = None, weeks: list[str] | None = None):
     """Main execution function for extra data preparation."""
-    global OUTPUT_DATA_DIR, DRIVE_DIR
+    global OUTPUT_DATA_DIR, DRIVE_DIR, WEEKS_TO_READ
     OUTPUT_DATA_DIR = output_dir
     DRIVE_DIR = drive_dir
+
+    # Override weeks if provided
+    if weeks is not None:
+        WEEKS_TO_READ = weeks
+        print(f"Using custom weeks: {WEEKS_TO_READ}")
 
     if DRIVE_DIR is not None:
         print(f"Google Drive caching enabled: {DRIVE_DIR}")
@@ -686,6 +691,12 @@ if __name__ == "__main__":
         default=DRIVE_DIR,
         help="Google Drive directory for caching (e.g., /content/drive/MyDrive/prepped_data_extra)",
     )
+    parser.add_argument(
+        "--weeks",
+        type=str,
+        nargs="+",
+        help="Weeks to process (e.g., --weeks 01 02 03). If not specified, uses default from WEEKS_TO_READ.",
+    )
     args = parser.parse_args()
 
-    main(output_dir=args.output_dir, drive_dir=args.drive_dir)
+    main(output_dir=args.output_dir, drive_dir=args.drive_dir, weeks=args.weeks)

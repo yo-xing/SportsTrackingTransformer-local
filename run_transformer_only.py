@@ -45,11 +45,13 @@ def main():
     print("Transformer-Only Training Pipeline")
     print("="*60 + "\n")
 
-    # Stage 1: Prepare extra data
+    # Stage 1: Prepare extra data (with all 18 weeks)
     if not args.skip_prep:
+        # Use all 18 weeks for full dataset training
+        all_weeks = " ".join([f"{i:02d}" for i in range(1, 19)])
         run_command(
-            f"uv run dvc repro prep_extra_data {force_flag}",
-            "Stage 1/3: Preparing extra data"
+            f"uv run python src/prep_extra_data.py --weeks {all_weeks}",
+            "Stage 1/3: Preparing extra data (18 weeks)"
         )
     else:
         print("\n⏭️  Skipping data preparation stage\n")
