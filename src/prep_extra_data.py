@@ -391,7 +391,13 @@ def add_relative_positions(df: pl.DataFrame) -> pl.DataFrame:
     )
 
     # Join ball anchor positions with main dataframe
-    df_with_anchor = df.join(ball_anchors, on=["gameId", "playId"], how="left")
+    # Use inner join to exclude plays without ball position data
+    df_with_anchor = df.join(ball_anchors, on=["gameId", "playId"], how="inner")
+
+    num_lost = len(df) - len(df_with_anchor)
+    if num_lost > 0:
+        plays_lost = df.select(["gameId", "playId"]).n_unique() - df_with_anchor.select(["gameId", "playId"]).n_unique()
+        print(f"Filtered out {plays_lost} plays without ball position data ({num_lost} rows)")
 
     # Use ball_anchor_x directly (no mirroring needed for x)
     # For y, apply mirroring if needed
