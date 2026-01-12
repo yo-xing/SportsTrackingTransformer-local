@@ -174,13 +174,14 @@ class BDB2024_Dataset(Dataset):
             qb = frame_df[(frame_df["side"] == 1) & (frame_df["position"] == "QB")]
             if len(qb) > 0:
                 ball_carrier = qb.head(1)
+                reference_id = ball_carrier.index[0]
             else:
                 # Use first offensive player
                 ball_carrier = frame_df[frame_df["side"] == 1].head(1)
+                reference_id = ball_carrier.index[0]
 
-            # For plays without ball carrier, include ALL offensive players (don't exclude reference)
-            # This maintains the expected shape of 10 offensive players
-            off_plyrs = frame_df[frame_df["side"] == 1]
+            # Exclude the reference player from offensive players to get exactly 10
+            off_plyrs = frame_df[(frame_df["side"] == 1) & (frame_df.index != reference_id)]
         else:
             # For plays with ball carrier, exclude the ball carrier from offensive players
             off_plyrs = frame_df[(frame_df["side"] == 1) & (frame_df["is_ball_carrier"] == 0)]
