@@ -376,5 +376,18 @@ if __name__ == "__main__":
         "--model_type", type=str, default="transformer", help="Type of model to train ('transformer' or 'zoo')"
     )
     parser.add_argument("--patience", "-P", type=int, default=4, help="Early stopping patience")
+    parser.add_argument("--dataset-dir", type=str, help="Dataset directory (default: data/datasets_extra)")
+    parser.add_argument("--models-dir", type=str, help="Models output directory (default: models)")
     args = parser.parse_args()
+
+    # Override global paths if provided
+    if args.dataset_dir:
+        import datasets
+        datasets.DATASET_DIR = Path(args.dataset_dir)
+    if args.models_dir:
+        global MODELS_PATH
+        MODELS_PATH = Path(args.models_dir)
+        MODELS_PATH.mkdir(exist_ok=True, parents=True)
+        print(f"Using custom models path: {MODELS_PATH}")
+
     main(args)
