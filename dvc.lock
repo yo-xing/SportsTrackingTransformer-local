@@ -32,32 +32,32 @@ stages:
       nfiles: 13
     - path: src/prep_data.py
       hash: md5
-      md5: dfec4dae85894179eac4f0d77f8aa571
-      size: 15796
+      md5: 1d2d5d92803772c7e697997e930d0cd3
+      size: 16431
     outs:
     - path: data/split_prepped_data/
       hash: md5
-      md5: 4b678a6cef636cd4b359ab7498186897.dir
-      size: 1023797370
+      md5: 82d9dcdd0337e44d906985f5963e005a.dir
+      size: 1022926064
       nfiles: 6
   precompute_datasets:
     cmd: uv run python src/datasets.py
     deps:
     - path: data/split_prepped_data/
       hash: md5
-      md5: 4b678a6cef636cd4b359ab7498186897.dir
-      size: 1023797370
+      md5: 82d9dcdd0337e44d906985f5963e005a.dir
+      size: 1022926064
       nfiles: 6
     - path: src/datasets.py
       hash: md5
-      md5: 9793656630b2820635c6bbccb1657c57
-      size: 13278
+      md5: b6d4c4935b96479260f6f32d6b402537
+      size: 14635
     outs:
     - path: data/datasets/
       hash: md5
-      md5: f053ab8cf0248fbbfa7a73b50eb65759.dir
-      size: 20102260403
-      nfiles: 7
+      md5: d751713988987e9331980363e24189ce.dir
+      size: 0
+      nfiles: 0
   train_zoo_models:
     cmd: uv run python src/train.py --model_type zoo --device 0 --skip-existing
     deps:
@@ -175,3 +175,40 @@ stages:
       hash: md5
       md5: 560a8d2d96a82d5a14856d867004db69
       size: 1284
+  prep_extra_data:
+    cmd: uv run python src/prep_extra_data.py
+    deps:
+    - path: extra_data/
+      hash: md5
+      md5: 9b598e4efde559a10680ab12d856acfd.dir
+      size: 4090546
+      nfiles: 2
+    - path: src/prep_extra_data.py
+      hash: md5
+      md5: f6e69b4b3222f4bfc28791377f7b2a17
+      size: 11105
+    outs:
+    - path: data/split_prepped_data_extra/
+      hash: md5
+      md5: d48a516aae07726ea166426251ecbd16.dir
+      size: 236266465
+      nfiles: 6
+  precompute_extra_datasets:
+    cmd: uv run python src/datasets.py --prepped-data-dir data/split_prepped_data_extra
+      --dataset-dir data/datasets_extra
+    deps:
+    - path: data/split_prepped_data_extra/
+      hash: md5
+      md5: 424fc8ac19d68d526e792559a8aca1fd.dir
+      size: 236508755
+      nfiles: 6
+    - path: src/datasets.py
+      hash: md5
+      md5: b6d4c4935b96479260f6f32d6b402537
+      size: 14635
+    outs:
+    - path: data/datasets_extra/
+      hash: md5
+      md5: ccdecdb19208b4604308e605fa2a6c6e.dir
+      size: 65174796
+      nfiles: 6

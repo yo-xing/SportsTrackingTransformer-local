@@ -165,25 +165,87 @@ class BDB2024_Dataset(Dataset):
         return x
 
     def zoo_transform_input_frame_df(self, frame_df: pd.DataFrame) -> np.ndarray:
+        """
+        Transform input frame DataFrame for zoo model.
+
+        Ensures fixed shapes:
+          - 1 ball carrier
+          - 10 offensive (non ball carrier)
+          - 11 defensive
+
+        If a frame has too few players (common in some tracking sources), we pad with zeros.
+        If too many, we keep the closest players to the ball carrier (by x_rel/y_rel distance).
+        """
+
+        # --- Split groups ---
         ball_carrier = frame_df[frame_df["is_ball_carrier"] == 1]
         off_plyrs = frame_df[(frame_df["side"] == 1) & (frame_df["is_ball_carrier"] == 0)]
         def_plyrs = frame_df[frame_df["side"] == -1]
 
-        ball_carr_mvmt_feats = ball_carrier[["x_rel", "y_rel", "vx", "vy"]].to_numpy(dtype=np.float32).squeeze()
-        off_mvmt_feats = off_plyrs[["x_rel", "y_rel", "vx", "vy"]].to_numpy(dtype=np.float32)
-        def_mvmt_feats = def_plyrs[["x_rel", "y_rel", "vx", "vy"]].to_numpy(dtype=np.float32)
+        # Ball carrier movement features (must exist)
+        if len(ball_carrier) == 0:
+            raise ValueError("No ball carrier found in this frame (is_ball_carrier==1).")
 
+        ball_carr_mvmt_feats = (
+            ball_carrier[["x_rel", "y_rel", "vx", "vy"]]
+            .to_numpy(dtype=np.float32)
+            .squeeze()
+        )
+        # If multiple rows are marked ball carrier (shouldn't happen), take the first
+        if ball_carr_mvmt_feats.ndim != 1 or ball_carr_mvmt_feats.shape[0] != 4:
+            ball_carr_mvmt_feats = (
+                ball_carrier[["x_rel", "y_rel", "vx", "vy"]]
+                .to_numpy(dtype=np.float32)[0]
+            )
+
+        # --- Helper: choose closest or pad ---
+        def _fix_count(df_part: pd.DataFrame, target_n: int) -> np.ndarray:
+            feats = df_part[["x_rel", "y_rel", "vx", "vy"]].to_numpy(dtype=np.float32)
+
+            n = feats.shape[0]
+            if n == target_n:
+                return feats
+
+            # If too many, keep closest to ball carrier by distance in rel coords
+            if n > target_n:
+                # distance computed from x_rel/y_rel (already relative to ball carrier anchor)
+                d2 = (feats[:, 0] ** 2) + (feats[:, 1] ** 2)
+                keep_idx = np.argsort(d2)[:target_n]
+                return feats[keep_idx]
+
+            # If too few, zero-pad
+            pad = np.zeros((target_n - n, 4), dtype=np.float32)
+            return np.vstack([feats, pad])
+
+        off_mvmt_feats = _fix_count(off_plyrs, 10)   # (10, 4)
+        def_mvmt_feats = _fix_count(def_plyrs, 11)   # (11, 4)
+
+        # --- Build zoo interaction tensor (10, 11, 10) ---
         x = [
+            # def_vx, def_vy
             np.tile(def_mvmt_feats[:, 2:], (10, 1, 1)),
-            np.tile(def_mvmt_feats[None, :, :2] - ball_carr_mvmt_feats[None, None, :2], (10, 1, 1)),
-            np.tile(def_mvmt_feats[None, :, 2:] - ball_carr_mvmt_feats[None, None, 2:], (10, 1, 1)),
+            # def_x - ball_x, def_y - ball_y
+            np.tile(
+                def_mvmt_feats[None, :, :2] - ball_carr_mvmt_feats[None, None, :2],
+                (10, 1, 1),
+            ),
+            # def_vx - ball_vx, def_vy - ball_vy
+            np.tile(
+                def_mvmt_feats[None, :, 2:] - ball_carr_mvmt_feats[None, None, 2:],
+                (10, 1, 1),
+            ),
+            # off_x - def_x, off_y - def_y
             off_mvmt_feats[:, None, :2] - def_mvmt_feats[None, :, :2],
+            # off_vx - def_vx, off_vy - def_vy
             off_mvmt_feats[:, None, 2:] - def_mvmt_feats[None, :, 2:],
         ]
 
         x = np.concatenate(x, dtype=np.float32, axis=-1)
+
+        # Now this should always be true
         assert x.shape == (10, 11, 10), f"Expected shape (10, 11, 10), got {x.shape}"
         return x
+
 
 
 class _DatasetUnpickler(pickle.Unpickler):
