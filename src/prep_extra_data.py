@@ -63,7 +63,8 @@ def load_extra_data() -> pl.DataFrame:
         df = pl.read_parquet(f)
         dfs.append(df)
 
-    return pl.concat(dfs, how="vertical")
+    # Use vertical_relaxed to handle schema differences (e.g., Int64 vs Float64)
+    return pl.concat(dfs, how="vertical_relaxed")
 
 
 def map_column_names(df: pl.DataFrame) -> pl.DataFrame:
