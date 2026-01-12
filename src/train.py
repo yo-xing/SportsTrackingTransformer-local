@@ -375,6 +375,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_type", type=str, default="transformer", help="Type of model to train ('transformer' or 'zoo')"
     )
-    parser.add_argument("--patience", "-P", type=int, default=10, help="Early stopping patience")
+    parser.add_argument("--patience", "-P", type=int, default=4, help="Early stopping patience")
     args = parser.parse_args()
     main(args)
