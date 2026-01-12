@@ -83,10 +83,11 @@ def predict_model_as_df(model: LitModel = None, ckpt_path: Path = None, devices=
     test_ds: BDB2024_Dataset = load_datasets(model.model_type, split="test")
 
     # Create unshuffled dataloaders for prediction
+    # Use smaller batch size and fewer workers to avoid OOM during evaluation
     dataloaders = {
-        "train": DataLoader(train_ds, batch_size=1024, shuffle=False, num_workers=10),
-        "val": DataLoader(val_ds, batch_size=1024, shuffle=False, num_workers=10),
-        "test": DataLoader(test_ds, batch_size=1024, shuffle=False, num_workers=10),
+        "train": DataLoader(train_ds, batch_size=512, shuffle=False, num_workers=4),
+        "val": DataLoader(val_ds, batch_size=512, shuffle=False, num_workers=4),
+        "test": DataLoader(test_ds, batch_size=512, shuffle=False, num_workers=4),
     }
 
     # Yard values for computing expected yards from probability distribution
