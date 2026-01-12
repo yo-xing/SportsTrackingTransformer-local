@@ -241,6 +241,7 @@ def _read_features(split: str) -> pl.DataFrame:
         "vy",
         "side",
         "is_ball_carrier",
+        "position",
     ]
     df = pl.read_parquet(path, columns=cols)
 
