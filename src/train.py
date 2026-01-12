@@ -349,7 +349,7 @@ def main(args):
     for M, L, LR in tqdm(gridsearch, desc="Hyperparam Gridsearch"):
         train_model(
             model_type=args.model_type,
-            batch_size=256,
+            batch_size=128,
             model_dim=M,
             num_layers=L,
             learning_rate=LR,
