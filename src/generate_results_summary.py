@@ -114,12 +114,41 @@ def load_results() -> pl.DataFrame:
     tracking_df = pl.read_parquet(f"{PREPPED_DATA_DIR}/*_features.parquet")
 
     # Join with tracking data to get per-frame events
-    results_df = results_df.join(
-        tracking_df.filter(pl.col("is_ball_carrier") == 1)
+    # Use ball carrier position when available, otherwise use first offensive player (e.g., QB)
+    ball_carrier_tracking = tracking_df.filter(pl.col("is_ball_carrier") == 1)
+
+    # For plays without ball carrier, use QB or first offensive player
+    fallback_tracking = (
+        tracking_df.filter(pl.col("side") == 1)
+        .group_by(["gameId", "playId", "frameId", "mirrored"])
+        .agg([
+            pl.col("x").filter(pl.col("position") == "QB").first().alias("x_qb"),
+            pl.col("y").filter(pl.col("position") == "QB").first().alias("y_qb"),
+            pl.col("x").first().alias("x_first"),
+            pl.col("y").first().alias("y_first"),
+            pl.col("event").first().alias("event"),
+        ])
+        .with_columns([
+            pl.coalesce(["x_qb", "x_first"]).alias("x"),
+            pl.coalesce(["y_qb", "y_first"]).alias("y"),
+        ])
         .select(["x", "y", "gameId", "playId", "frameId", "mirrored", "event"])
-        .rename({"x": "ball_carrier_x", "y": "ball_carrier_y"}),
+    )
+
+    # Combine ball carrier and fallback tracking
+    player_tracking = pl.concat([
+        ball_carrier_tracking.select(["x", "y", "gameId", "playId", "frameId", "mirrored", "event"]),
+        fallback_tracking.join(
+            ball_carrier_tracking.select(["gameId", "playId", "frameId", "mirrored"]),
+            on=["gameId", "playId", "frameId", "mirrored"],
+            how="anti",
+        ),
+    ]).rename({"x": "ball_carrier_x", "y": "ball_carrier_y"})
+
+    results_df = results_df.join(
+        player_tracking,
         on=["gameId", "playId", "frameId", "mirrored"],
-        how="inner",
+        how="left",
     )
 
     # Filter to mirrored=False to avoid double-counting predictions

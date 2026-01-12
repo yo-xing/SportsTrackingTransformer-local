@@ -28,6 +28,12 @@ INPUT_DATA_DIR = Path("/content/drive/MyDrive/NGS/NFL/REG/")
 OUTPUT_DATA_DIR = Path("data/split_prepped_data_extra/")
 DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache") # Google Drive directory for caching (optional)
 
+# Weeks to read
+WEEKS_TO_READ = ["06", "07"]
+
+# Accepted play types
+ACCEPTED_PLAY_TYPES = ["play_type_pass", "play_type_rush", "play_type_sack"]
+
 # Expected output files
 OUTPUT_FILES = [
     "train_features.parquet",
@@ -41,22 +47,27 @@ OUTPUT_FILES = [
 
 def load_extra_data() -> pl.DataFrame:
     """
-    Load all parquet files from extra_data directory structure.
+    Load parquet files from specified weeks only.
     Expected structure: /content/drive/MyDrive/NGS/NFL/REG/Week XX/*.parquet
 
     Skips *_mirror.parquet files since we do our own mirroring.
 
     Returns:
-        pl.DataFrame: Combined tracking data from all weeks.
+        pl.DataFrame: Combined tracking data from specified weeks.
     """
-    parquet_files = [
-        f for f in INPUT_DATA_DIR.glob("Week*/*.parquet")
-        if "_mirror" not in f.name
-    ]
-    if not parquet_files:
-        raise FileNotFoundError(f"No parquet files found in {INPUT_DATA_DIR}/Week*/")
+    parquet_files = []
+    for wk in WEEKS_TO_READ:
+        # Try both "Week 06" and "Week06" patterns
+        parquet_files.extend(INPUT_DATA_DIR.glob(f"Week {wk}/*.parquet"))
+        parquet_files.extend(INPUT_DATA_DIR.glob(f"Week{wk}/*.parquet"))
 
-    print(f"Found {len(parquet_files)} parquet files (excluding _mirror files)")
+    # Filter out mirror files
+    parquet_files = [f for f in parquet_files if "_mirror" not in f.name]
+
+    if not parquet_files:
+        raise FileNotFoundError(f"No parquet files found in {INPUT_DATA_DIR} for weeks {WEEKS_TO_READ}")
+
+    print(f"Found {len(parquet_files)} parquet files from weeks {WEEKS_TO_READ} (excluding _mirror files)")
 
     dfs = []
     for f in parquet_files:
@@ -104,13 +115,13 @@ def filter_tracking_data(df: pl.DataFrame) -> pl.DataFrame:
     """
     Filter tracking data:
     - Remove football rows (possession_status == 'ball')
-    - Keep only pass plays
+    - Keep only accepted play types (pass, rush, sack)
 
     Args:
         df: Raw tracking data
 
     Returns:
-        Filtered tracking data with only pass plays
+        Filtered tracking data with only accepted play types
     """
     og_len = len(df)
 
@@ -118,10 +129,10 @@ def filter_tracking_data(df: pl.DataFrame) -> pl.DataFrame:
     df = df.filter(pl.col("possession_status") != "ball")
     print(f"Removed football rows: {og_len - len(df)} rows")
 
-    # Keep only pass plays
+    # Keep only accepted play types
     og_len = len(df)
-    df = df.filter(pl.col("play_type") == "play_type_pass")
-    print(f"Filtered to pass plays only: {og_len - len(df)} rows removed")
+    df = df.filter(pl.col("play_type").is_in(ACCEPTED_PLAY_TYPES))
+    print(f"Filtered to accepted play types {ACCEPTED_PLAY_TYPES}: {og_len - len(df)} rows removed")
 
     return df
 
@@ -132,19 +143,21 @@ def identify_ball_carrier(df: pl.DataFrame) -> pl.DataFrame:
 
     Strategy: Find the offensive player closest to the football at the handoff frame.
     For plays without handoff event, use first_contact or ball_snap as fallback.
+    For plays where no ball carrier can be identified (e.g., dropped pass),
+    ballCarrierId will be null.
 
     Args:
         df: Tracking data with football positions
 
     Returns:
-        DataFrame with ballCarrierId column added
+        DataFrame with ballCarrierId column added (nullable)
     """
     # Load raw data to get football positions
     raw_df = load_extra_data()
     raw_df = map_column_names(raw_df)
 
-    # Keep only pass plays (same as filter_tracking_data)
-    raw_df = raw_df.filter(pl.col("play_type") == "play_type_pass")
+    # Keep only accepted play types (same as filter_tracking_data)
+    raw_df = raw_df.filter(pl.col("play_type").is_in(ACCEPTED_PLAY_TYPES))
 
     # Get football position at key events
     football_df = raw_df.filter(pl.col("possession_status") == "ball")
@@ -216,7 +229,8 @@ def identify_ball_carrier(df: pl.DataFrame) -> pl.DataFrame:
     ball_carrier_df = pl.DataFrame(ball_carriers)
     print(f"Identified ball carriers for {len(ball_carrier_df)} plays")
 
-    return df.join(ball_carrier_df, on=["gameId", "playId"], how="inner")
+    # Use left join to keep all plays, even those without a ball carrier
+    return df.join(ball_carrier_df, on=["gameId", "playId"], how="left")
 
 
 def add_derived_features(df: pl.DataFrame) -> pl.DataFrame:
@@ -329,18 +343,69 @@ def augment_mirror_tracking(df: pl.DataFrame) -> pl.DataFrame:
 
 def add_relative_positions(df: pl.DataFrame) -> pl.DataFrame:
     """
-    Add relative position features anchored to ball carrier at first frame.
+    Add relative position features anchored to the ball position at first frame.
+    This works for all plays including those without a ball carrier (e.g., incomplete passes).
     """
-    return (
-        df.sort("frameId")
+    # Load raw data to get football positions
+    raw_df = load_extra_data()
+    raw_df = map_column_names(raw_df)
+
+    # Keep only accepted play types (same as filter_tracking_data)
+    raw_df = raw_df.filter(pl.col("play_type").is_in(ACCEPTED_PLAY_TYPES))
+
+    # Get football positions
+    football_df = raw_df.filter(pl.col("possession_status") == "ball")
+
+    # Apply same direction standardization as main df
+    # First need to get play directions
+    play_directions = (
+        df.filter(pl.col("side") == 1)
+        .group_by(["gameId", "playId"])
+        .agg([
+            pl.col("x").filter(pl.col("frameId") == pl.col("frameId").min()).mean().alias("avg_off_x"),
+            pl.col("line_of_scrimmage").first().alias("los"),
+        ])
         .with_columns(
-            anchor_x=pl.col("x").filter(pl.col("is_ball_carrier") == 1).first().over(["gameId", "playId", "mirrored"]),
-            anchor_y=pl.col("y").filter(pl.col("is_ball_carrier") == 1).first().over(["gameId", "playId", "mirrored"]),
+            playDirection=pl.when(pl.col("avg_off_x") > pl.col("los"))
+            .then(pl.lit("left"))
+            .otherwise(pl.lit("right"))
         )
-        .with_columns(
-            x_rel=pl.col("x") - pl.col("anchor_x"),
-            y_rel=pl.col("y") - pl.col("anchor_y"),
-        )
+        .select(["gameId", "playId", "playDirection"])
+    )
+
+    football_df = football_df.join(play_directions, on=["gameId", "playId"], how="left")
+
+    # Standardize football position
+    football_df = football_df.with_columns(
+        x=pl.when(pl.col("playDirection") == "right").then(pl.col("x")).otherwise(120 - pl.col("x")),
+        y=pl.when(pl.col("playDirection") == "right").then(pl.col("y")).otherwise(53.3 - pl.col("y")),
+    )
+
+    # Get ball position at first frame for each play
+    ball_anchors = (
+        football_df.group_by(["gameId", "playId"])
+        .agg([
+            pl.col("x").filter(pl.col("frameId") == pl.col("frameId").min()).first().alias("ball_anchor_x"),
+            pl.col("y").filter(pl.col("frameId") == pl.col("frameId").min()).first().alias("ball_anchor_y"),
+        ])
+    )
+
+    # Join ball anchor positions with main dataframe
+    df_with_anchor = df.join(ball_anchors, on=["gameId", "playId"], how="left")
+
+    # Use ball_anchor_x directly (no mirroring needed for x)
+    # For y, apply mirroring if needed
+    df_with_anchor = df_with_anchor.with_columns([
+        pl.col("ball_anchor_x").alias("anchor_x"),
+        pl.when(pl.col("mirrored"))
+        .then(53.3 - pl.col("ball_anchor_y"))
+        .otherwise(pl.col("ball_anchor_y"))
+        .alias("anchor_y"),
+    ]).drop(["ball_anchor_x", "ball_anchor_y"])
+
+    return df_with_anchor.with_columns(
+        x_rel=pl.col("x") - pl.col("anchor_x"),
+        y_rel=pl.col("y") - pl.col("anchor_y"),
     )
 
 

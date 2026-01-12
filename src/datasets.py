@@ -165,8 +165,24 @@ class BDB2024_Dataset(Dataset):
         return x
 
     def zoo_transform_input_frame_df(self, frame_df: pd.DataFrame) -> np.ndarray:
+        # Try to get ball carrier first
         ball_carrier = frame_df[frame_df["is_ball_carrier"] == 1]
-        off_plyrs = frame_df[(frame_df["side"] == 1) & (frame_df["is_ball_carrier"] == 0)]
+
+        # If no ball carrier, use QB as the reference player, or first offensive player
+        if len(ball_carrier) == 0:
+            # Try to find QB
+            qb = frame_df[(frame_df["side"] == 1) & (frame_df["position"] == "QB")]
+            if len(qb) > 0:
+                ball_carrier = qb.head(1)
+            else:
+                # Use first offensive player
+                ball_carrier = frame_df[frame_df["side"] == 1].head(1)
+
+            # Get other offensive players (excluding the reference player)
+            off_plyrs = frame_df[(frame_df["side"] == 1) & (frame_df.index != ball_carrier.index[0])]
+        else:
+            off_plyrs = frame_df[(frame_df["side"] == 1) & (frame_df["is_ball_carrier"] == 0)]
+
         def_plyrs = frame_df[frame_df["side"] == -1]
 
         ball_carr_mvmt_feats = ball_carrier[["x_rel", "y_rel", "vx", "vy"]].to_numpy(dtype=np.float32).squeeze()
