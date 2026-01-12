@@ -409,6 +409,35 @@ def add_relative_positions(df: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def filter_complete_plays(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Filter out plays that don't have exactly 22 players per frame.
+    This ensures all plays work with both transformer and zoo models.
+    Still keeps plays without ball carriers as long as they have 22 players.
+    """
+    # Count players per frame
+    player_counts = df.group_by(["gameId", "playId", "mirrored", "frameId"]).agg(
+        pl.count().alias("player_count")
+    )
+
+    # Find plays with any frame that doesn't have 22 players
+    incomplete_plays = (
+        player_counts
+        .filter(pl.col("player_count") != 22)
+        .select(["gameId", "playId", "mirrored"])
+        .unique()
+    )
+
+    num_incomplete = len(incomplete_plays)
+    total_plays = df.select(["gameId", "playId", "mirrored"]).n_unique()
+
+    if num_incomplete > 0:
+        print(f"Filtering out {num_incomplete}/{total_plays} plays with != 22 players per frame")
+        df = df.join(incomplete_plays, on=["gameId", "playId", "mirrored"], how="anti")
+
+    return df
+
+
 def get_yards_gained_target_df(df: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     """
     Generate target dataframe for yards gained prediction.
@@ -599,6 +628,9 @@ def main(output_dir: Path = OUTPUT_DATA_DIR, drive_dir: Path | None = None):
 
     print("\nAdding relative positions...")
     df = add_relative_positions(df)
+
+    print("\nFiltering plays with incomplete rosters...")
+    df = filter_complete_plays(df)
 
     print("\nGenerating targets...")
     target_df, df = get_yards_gained_target_df(df)
