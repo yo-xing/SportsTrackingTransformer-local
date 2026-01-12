@@ -104,13 +104,13 @@ def filter_tracking_data(df: pl.DataFrame) -> pl.DataFrame:
     """
     Filter tracking data:
     - Remove football rows (possession_status == 'ball')
-    - Filter out special teams plays (kickoff, punt, field_goal, xp)
+    - Keep only pass plays
 
     Args:
         df: Raw tracking data
 
     Returns:
-        Filtered tracking data
+        Filtered tracking data with only pass plays
     """
     og_len = len(df)
 
@@ -118,16 +118,10 @@ def filter_tracking_data(df: pl.DataFrame) -> pl.DataFrame:
     df = df.filter(pl.col("possession_status") != "ball")
     print(f"Removed football rows: {og_len - len(df)} rows")
 
-    # Filter out special teams plays
-    special_teams_plays = [
-        "play_type_kickoff",
-        "play_type_punt",
-        "play_type_field_goal",
-        "play_type_xp",
-    ]
+    # Keep only pass plays
     og_len = len(df)
-    df = df.filter(~pl.col("play_type").is_in(special_teams_plays))
-    print(f"Filtered out special teams plays: {og_len - len(df)} rows removed")
+    df = df.filter(pl.col("play_type") == "play_type_pass")
+    print(f"Filtered to pass plays only: {og_len - len(df)} rows removed")
 
     return df
 
@@ -149,14 +143,8 @@ def identify_ball_carrier(df: pl.DataFrame) -> pl.DataFrame:
     raw_df = load_extra_data()
     raw_df = map_column_names(raw_df)
 
-    # Filter out special teams plays (same as filter_tracking_data)
-    special_teams_plays = [
-        "play_type_kickoff",
-        "play_type_punt",
-        "play_type_field_goal",
-        "play_type_xp",
-    ]
-    raw_df = raw_df.filter(~pl.col("play_type").is_in(special_teams_plays))
+    # Keep only pass plays (same as filter_tracking_data)
+    raw_df = raw_df.filter(pl.col("play_type") == "play_type_pass")
 
     # Get football position at key events
     football_df = raw_df.filter(pl.col("possession_status") == "ball")
