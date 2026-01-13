@@ -55,6 +55,27 @@ def main():
     local_output_datasets = "data/datasets_extra_gamestate"
     local_output_models = "models_gamestate"
 
+    # If force flag is set, delete cache directories to force regeneration
+    if args.force:
+        print("\n🔄 Force flag set - deleting cache directories...\n")
+        import shutil
+        from pathlib import Path
+
+        # Delete local caches
+        for cache_dir in [local_output_prep, local_output_datasets]:
+            if Path(cache_dir).exists():
+                print(f"  Deleting {cache_dir}")
+                shutil.rmtree(cache_dir)
+
+        # Delete Google Drive caches if mounted
+        for cache_dir in [drive_cache_prep, drive_cache_datasets]:
+            cache_path = Path(cache_dir)
+            if cache_path.exists():
+                print(f"  Deleting {cache_dir}")
+                shutil.rmtree(cache_dir)
+
+        print("\n✓ Cache directories deleted\n")
+
     # Stage 1: Prepare extra data (with all 18 weeks)
     if not args.skip_prep:
         # Use all 18 weeks for full dataset training
