@@ -78,9 +78,11 @@ def main():
         print("\n⏭️  Skipping feature precomputation stage\n")
 
     # Stage 3: Train transformer models only
+    # Optimized for A100 with 167GB RAM: batch_size=256, num_workers=16
     run_command(
         f"uv run python src/train.py --model_type transformer --device 0 "
-        f"--dataset-dir {local_output_datasets} --models-dir {local_output_models} --skip-existing",
+        f"--dataset-dir {local_output_datasets} --models-dir {local_output_models} "
+        f"--batch-size 256 --num-workers 16 --skip-existing",
         "Stage 3/3: Training transformer models"
     )
 

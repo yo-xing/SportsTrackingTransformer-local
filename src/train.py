@@ -187,6 +187,7 @@ def train_model(
     dbg_run=False,
     skip_existing=False,
     patience=5,
+    num_workers=8,
 ):
     """
     Train a single model with specified hyperparameters.
@@ -265,9 +266,8 @@ def train_model(
     # Create dataloaders with optimized settings
     # Training: smaller batch size, shuffled for better generalization
     # Validation: larger batch size (1024), no shuffle for consistent evaluation
-    # Use fewer workers (8) to avoid OOM on Colab with limited RAM
-    train_dataloader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=8)
-    val_dataloader = DataLoader(val_ds, batch_size=1024, shuffle=False, pin_memory=True, num_workers=8)
+    train_dataloader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_workers)
+    val_dataloader = DataLoader(val_ds, batch_size=1024, shuffle=False, pin_memory=True, num_workers=num_workers)
 
     # Set up devices
     devices = [device] if device >= 0 else [0, 1]  # if device is specified, use it, otherwise pick 1 gpu to use
@@ -350,7 +350,7 @@ def main(args):
     for M, L, LR in tqdm(gridsearch, desc="Hyperparam Gridsearch"):
         train_model(
             model_type=args.model_type,
-            batch_size=128,
+            batch_size=args.batch_size,
             model_dim=M,
             num_layers=L,
             learning_rate=LR,
@@ -358,6 +358,7 @@ def main(args):
             device=args.device,
             skip_existing=args.skip_existing,
             patience=args.patience,
+            num_workers=args.num_workers,
         )
 
 
@@ -378,6 +379,8 @@ if __name__ == "__main__":
     parser.add_argument("--patience", "-P", type=int, default=4, help="Early stopping patience")
     parser.add_argument("--dataset-dir", type=str, help="Dataset directory (default: data/datasets_extra)")
     parser.add_argument("--models-dir", type=str, help="Models output directory (default: models)")
+    parser.add_argument("--batch-size", type=int, default=128, help="Training batch size (default: 128)")
+    parser.add_argument("--num-workers", type=int, default=8, help="DataLoader workers (default: 8)")
     args = parser.parse_args()
 
     # Override global paths if provided

@@ -37,9 +37,12 @@ echo ""
 
 # Stage 3: Train transformer models only
 echo "Stage 3/3: Training transformer models..."
+# Optimized for A100 with 167GB RAM: batch_size=256, num_workers=16
 uv run python src/train.py --model_type transformer --device 0 \
   --dataset-dir "$LOCAL_OUTPUT_DATASETS" \
   --models-dir "$LOCAL_OUTPUT_MODELS" \
+  --batch-size 256 \
+  --num-workers 16 \
   --skip-existing
 echo "✓ Transformer training complete"
 echo ""
