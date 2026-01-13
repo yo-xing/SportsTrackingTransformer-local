@@ -220,7 +220,6 @@ def train_model(
         unless skip_existing=True in which case training is skipped entirely.
     """
     # Set up logger and trainer for full run
-    print(f"[DEBUG] MODELS_PATH = {MODELS_PATH}")
     logger = TensorBoardLogger(
         save_dir=MODELS_PATH,
         name=model_type,
@@ -231,11 +230,9 @@ def train_model(
 
     # Check for existing checkpoint with best val_loss
     ckpt_dir = Path(logger.log_dir) / "checkpoints"
-    print(f"[DEBUG] Checkpoint directory: {ckpt_dir}")
     existing_ckpt = None
     if ckpt_dir.exists():
         ckpts = list(ckpt_dir.glob("*.ckpt"))
-        print(f"[DEBUG] Found {len(ckpts)} checkpoints in {ckpt_dir}")
         if ckpts:
             # Find the checkpoint with the lowest val_loss
             best_ckpt = min(ckpts, key=lambda x: get_epoch_val_loss_from_ckpt(x)[1])
@@ -244,19 +241,13 @@ def train_model(
             # Skip checkpoint if val_loss is NaN or inf
             if not (np.isnan(best_val_loss) or np.isinf(best_val_loss)):
                 existing_ckpt = str(best_ckpt)
-                print(f"[DEBUG] Resuming training from best checkpoint: {existing_ckpt}")
-                print(f"[DEBUG] WARNING: This checkpoint may have wrong feature dimensions!")
-                print(f"[DEBUG] Deleting checkpoint to start fresh with 11 features...")
-                best_ckpt.unlink()
-                existing_ckpt = None
+                print(f"Resuming training from best checkpoint: {existing_ckpt}")
             else:
-                print(f"[DEBUG] Found checkpoint with NaN/inf loss, starting fresh training instead")
+                print(f"Found checkpoint with NaN/inf loss, starting fresh training instead")
                 # Delete the bad checkpoint
                 for ckpt in ckpts:
-                    print(f"[DEBUG] Deleting bad checkpoint: {ckpt}")
+                    print(f"Deleting bad checkpoint: {ckpt}")
                     ckpt.unlink()
-    else:
-        print(f"[DEBUG] No checkpoint directory exists yet, starting fresh")
 
     # initialize model
     if existing_ckpt is not None:
