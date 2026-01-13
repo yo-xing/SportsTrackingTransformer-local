@@ -304,6 +304,7 @@ def train_model(
         devices=devices,
         sync_batchnorm=True,
         enable_model_summary=True,
+        gradient_clip_val=1.0,  # Clip gradients to prevent explosion
         callbacks=[
             callbacks.EarlyStopping(monitor="val_loss", patience=patience),
             callbacks.ModelCheckpoint(monitor="val_loss", save_top_k=1, filename="{epoch}-{val_loss:.3f}"),
