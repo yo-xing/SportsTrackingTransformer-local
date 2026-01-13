@@ -337,13 +337,13 @@ def main(args):
     and random search based on the provided arguments.
     """
     # Hyperparameter search space:
-    # - lrs: Learning rate (1e-5 for 18-week dataset, lowered from 1e-4 to prevent NaN loss)
+    # - lrs: Learning rate (1e-4 based on prior experimentation)
     # - model_dims: Model width (32, 128, 512) - # size of internal vector representation for each player in each layer
     # - num_layers: Model depth (1, 2, 4, 8) - number of stacked layers
     #
     # Total: 12 configurations per architecture × 2 architectures = 24 models
 
-    lrs = [1e-5]
+    lrs = [1e-4]
     model_dims = [32, 128, 512]
     num_layers = [1, 2, 4, 8]
 

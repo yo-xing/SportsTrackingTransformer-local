@@ -61,8 +61,8 @@ class SportsTransformer(nn.Module):
             "dim_feedforward": dim_feedforward,
         }
 
-        # Normalize input features (LayerNorm is more stable than BatchNorm for varied dataset sizes)
-        self.feature_norm_layer = nn.LayerNorm(feature_len)
+        # Normalize input features
+        self.feature_norm_layer = nn.BatchNorm1d(feature_len)
 
         # Embed input features to model dimension
         self.feature_embedding_layer = nn.Sequential(
@@ -120,8 +120,8 @@ class SportsTransformer(nn.Module):
         # x: [B: batch_size, P: # of players, F: feature_len]
         B, P, F = x.size()
 
-        # Normalize features (LayerNorm works directly on last dimension)
-        x = self.feature_norm_layer(x)  # [B,P,F] -> [B,P,F]
+        # Normalize features
+        x = self.feature_norm_layer(x.permute(0, 2, 1)).permute(0, 2, 1)  # [B,P,F] -> [B,P,F]
 
         # Embed features
         x = self.feature_embedding_layer(x)  # [B,P,F] -> [B,P,M: model_dim]

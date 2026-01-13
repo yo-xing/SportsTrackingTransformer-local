@@ -414,19 +414,22 @@ def add_relative_positions(df: pl.DataFrame) -> pl.DataFrame:
         y_rel=pl.col("y") - pl.col("anchor_y"),
     )
 
-    # Filter out any rows with null values in critical columns
+    # Filter out any rows with null or inf values in critical columns
+    # These are the actual features used by the transformer model: [x_rel, y_rel, vx, vy, side, is_ball_carrier]
     df_clean = df_with_rel.filter(
-        pl.col("x").is_not_null() &
-        pl.col("y").is_not_null() &
-        pl.col("vx").is_not_null() &
-        pl.col("vy").is_not_null() &
-        pl.col("x_rel").is_not_null() &
-        pl.col("y_rel").is_not_null()
+        pl.col("x").is_not_null() & pl.col("x").is_finite() &
+        pl.col("y").is_not_null() & pl.col("y").is_finite() &
+        pl.col("vx").is_not_null() & pl.col("vx").is_finite() &
+        pl.col("vy").is_not_null() & pl.col("vy").is_finite() &
+        pl.col("x_rel").is_not_null() & pl.col("x_rel").is_finite() &
+        pl.col("y_rel").is_not_null() & pl.col("y_rel").is_finite() &
+        pl.col("side").is_not_null() & pl.col("side").is_finite() &
+        pl.col("is_ball_carrier").is_not_null() & pl.col("is_ball_carrier").is_finite()
     )
 
-    num_null_rows = len(df_with_rel) - len(df_clean)
-    if num_null_rows > 0:
-        print(f"Filtered out {num_null_rows} rows with null position/velocity values")
+    num_bad_rows = len(df_with_rel) - len(df_clean)
+    if num_bad_rows > 0:
+        print(f"Filtered out {num_bad_rows} rows with null/inf position/velocity values")
 
     return df_clean
 
