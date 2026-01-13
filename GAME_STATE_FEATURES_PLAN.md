@@ -1,7 +1,7 @@
 # Game State Features Implementation Plan
 
 ## Overview
-Add game state features (yardsToGo, down, distanceToGoal, quarter) to the transformer model to provide situational context about each play.
+Add game state features (yardsToGo, down, distanceToGoal, quarter, half_seconds_remaining) to the transformer model to provide situational context about each play.
 
 ## Current State
 **Current model features (6 per player):**
@@ -20,15 +20,16 @@ Add game state features (yardsToGo, down, distanceToGoal, quarter) to the transf
 - `down`: Current down (1-4)
 - `distanceToGoal`: Distance to opponent's goal (0-100)
 - `quarter`: Quarter (1-4)
+- `half_seconds_remaining`: Seconds remaining in current half (0-1800)
 
-These are already calculated in `prep_extra_data.py` and saved to the features parquet files.
+Most of these are already calculated in `prep_extra_data.py` and saved to the features parquet files.
 
 ## Implementation Options
 
 ### Option 1: Broadcast to All Players (Recommended)
 Append game state to each player's feature vector.
 
-**New input shape:** `[batch_size, 22 players, 10 features]`
+**New input shape:** `[batch_size, 22 players, 11 features]`
 
 **Pros:**
 - Simple implementation
@@ -36,12 +37,12 @@ Append game state to each player's feature vector.
 - No architectural changes needed beyond input dimension
 
 **Cons:**
-- Redundant data (same 4 values repeated 22 times)
+- Redundant data (same 5 values repeated 22 times)
 - Slightly larger memory footprint
 
 **Implementation:**
 1. Modify `datasets.py` to include game state columns in feature extraction
-2. Update `models.py` to accept `feature_len=10` for transformer
+2. Update `models.py` to accept `feature_len=11` for transformer
 3. Retrain models
 
 ### Option 2: Separate Game State Embedding
@@ -49,10 +50,10 @@ Create a separate embedding for game state and concatenate with pooled player fe
 
 **Architecture:**
 ```
-Input: [B, 22, 6] player features + [B, 4] game state
+Input: [B, 22, 6] player features + [B, 5] game state
 ↓
 Player branch: [B, 22, 6] → Transformer → Pool → [B, model_dim]
-Game state branch: [B, 4] → Linear → [B, model_dim]
+Game state branch: [B, 5] → Linear → [B, model_dim]
 ↓
 Concatenate: [B, 2*model_dim]
 ↓
@@ -74,13 +75,13 @@ Process players through transformer, then concatenate game state before decoder.
 
 **Architecture:**
 ```
-Input: [B, 22, 6] player features + [B, 4] game state
+Input: [B, 22, 6] player features + [B, 5] game state
 ↓
 Player features: [B, 22, 6] → Transformer → Pool → [B, model_dim]
 ↓
-Concatenate with game state: [B, model_dim + 4]
+Concatenate with game state: [B, model_dim + 5]
 ↓
-Decoder: [B, model_dim + 4] → [B, NUM_YARDS_CLASSES]
+Decoder: [B, model_dim + 5] → [B, NUM_YARDS_CLASSES]
 ```
 
 **Pros:**
@@ -116,7 +117,7 @@ TRANSFORMER_FEATURES = ['x_rel', 'y_rel', 'vx', 'vy', 'side', 'is_ball_carrier']
 # New: Add game state features
 TRANSFORMER_FEATURES = [
     'x_rel', 'y_rel', 'vx', 'vy', 'side', 'is_ball_carrier',
-    'yardsToGo', 'down', 'distanceToGoal', 'quarter'
+    'yardsToGo', 'down', 'distanceToGoal', 'quarter', 'half_seconds_remaining'
 ]
 ```
 
@@ -130,7 +131,7 @@ TRANSFORMER_FEATURES = [
 self.feature_len = 6 if self.model_type == "transformer" else 10
 
 # New
-self.feature_len = 10 if self.model_type == "transformer" else 10  # Both now use 10
+self.feature_len = 11 if self.model_type == "transformer" else 10  # Transformer now uses 11
 ```
 
 **Note:** The SportsTransformer model itself doesn't need changes - it already accepts `feature_len` as a parameter and will automatically adjust to the new input dimension.
@@ -143,9 +144,10 @@ Check that all game state features are present in the prepared data.
 - `down` - Need to check if this exists
 - `distanceToGoal` - Already calculated in prep_extra_data.py line 281
 - `quarter` - Need to check if this exists
+- `half_seconds_remaining` - Need to check if this exists
 
 ### 4. Handle Missing Columns
-If `down` or `quarter` are missing, need to add them in `prep_extra_data.py`.
+If `down`, `quarter`, or `half_seconds_remaining` are missing, need to add them in `prep_extra_data.py`.
 
 **Check the raw data schema first**, then add mapping if needed:
 ```python
@@ -163,10 +165,11 @@ Game state features have different scales:
 - `down`: 1-4
 - `distanceToGoal`: 0-100
 - `quarter`: 1-4
+- `half_seconds_remaining`: 0-1800
 
 **Options:**
 1. **Let BatchNorm handle it** (current approach for other features)
-   - BatchNorm1d in the model will normalize all 10 features together
+   - BatchNorm1d in the model will normalize all 11 features together
    - Simplest approach
 
 2. **Pre-normalize game state features**
@@ -189,6 +192,7 @@ Game state features have different scales:
 2. **Red zone:** Play calling changes dramatically near the goal line
 3. **Yards to go:** Short-yardage vs long-yardage plays are fundamentally different
 4. **Time context:** Quarter affects pace and play selection
+5. **Time pressure:** Final minutes of each half see rushed play calling and prevent defense
 
 **Metrics to track:**
 - Validation loss (CrossEntropy)
@@ -220,12 +224,19 @@ Game state features have different scales:
 - Visualize attention weights for game state features
 - Try larger model dimensions
 
-## Alternative: Add Time Remaining
-If game clock data is available, consider:
-- `half_seconds_remaining`: Seconds left in half
-- Could capture late-game urgency
+## Notes on half_seconds_remaining
+This feature captures time pressure within each half:
+- Range: 0-1800 seconds (30 minutes per half)
+- Critical for understanding urgency and play calling
+- Teams behave very differently with <2 minutes remaining
+- If not available in raw data, can be computed from `gameClock` + `quarter`:
+  ```python
+  # Quarters 1-2 are first half, 3-4 are second half
+  # Each quarter is 15 minutes (900 seconds)
+  half_seconds_remaining = calculate_from_game_clock_and_quarter(gameClock, quarter)
+  ```
 
-**Implementation:** Same as other game state features, just add to the list.
+**Implementation:** Same as other game state features - add to feature list and broadcast to all players.
 
 ## Next Steps
 1. ✅ Update notebook to explore game state features
