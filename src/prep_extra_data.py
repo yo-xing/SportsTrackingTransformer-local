@@ -245,7 +245,7 @@ def add_derived_features(df: pl.DataFrame) -> pl.DataFrame:
         - distanceToGoal: Distance to goal line
     """
     df = df.with_columns(
-        is_ball_carrier=(pl.col("nflId") == pl.col("ballCarrierId")).cast(int),
+        is_ball_carrier=(pl.col("nflId") == pl.col("ballCarrierId")).cast(int).fill_null(0),
         side=pl.when(pl.col("possession_status") == "off")
         .then(pl.lit(1))
         .otherwise(pl.lit(-1)),
