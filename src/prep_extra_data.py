@@ -478,8 +478,14 @@ def filter_null_features(df: pl.DataFrame) -> pl.DataFrame:
     """
     Filter out frames with null values in feature columns.
     Null values cause NaN loss during training.
+
+    Note: This checks base tracking features (x, y, s, o, dir) that exist in the raw data.
+    The model input features (x_rel, y_rel, vx, vy, side, is_ball_carrier) are already
+    filtered in add_relative_positions().
     """
-    feature_cols = ["x", "y", "s", "a", "o", "dir"]
+    # Only check columns that exist in the Axially format
+    # Note: 'a' (acceleration) doesn't exist in Axially data, we have 'accel' instead
+    feature_cols = [col for col in ["x", "y", "s", "o", "dir", "vx", "vy"] if col in df.columns]
 
     # Count rows before filtering
     rows_before = len(df)
