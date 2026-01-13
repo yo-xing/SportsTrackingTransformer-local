@@ -235,6 +235,7 @@ def train_model(
     existing_ckpt = None
     if ckpt_dir.exists():
         ckpts = list(ckpt_dir.glob("*.ckpt"))
+        print(f"[DEBUG] Found {len(ckpts)} checkpoints in {ckpt_dir}")
         if ckpts:
             # Find the checkpoint with the lowest val_loss
             best_ckpt = min(ckpts, key=lambda x: get_epoch_val_loss_from_ckpt(x)[1])
@@ -243,13 +244,19 @@ def train_model(
             # Skip checkpoint if val_loss is NaN or inf
             if not (np.isnan(best_val_loss) or np.isinf(best_val_loss)):
                 existing_ckpt = str(best_ckpt)
-                print(f"Resuming training from best checkpoint: {existing_ckpt}")
+                print(f"[DEBUG] Resuming training from best checkpoint: {existing_ckpt}")
+                print(f"[DEBUG] WARNING: This checkpoint may have wrong feature dimensions!")
+                print(f"[DEBUG] Deleting checkpoint to start fresh with 11 features...")
+                best_ckpt.unlink()
+                existing_ckpt = None
             else:
-                print(f"Found checkpoint with NaN/inf loss, starting fresh training instead")
+                print(f"[DEBUG] Found checkpoint with NaN/inf loss, starting fresh training instead")
                 # Delete the bad checkpoint
                 for ckpt in ckpts:
-                    print(f"Deleting bad checkpoint: {ckpt}")
+                    print(f"[DEBUG] Deleting bad checkpoint: {ckpt}")
                     ckpt.unlink()
+    else:
+        print(f"[DEBUG] No checkpoint directory exists yet, starting fresh")
 
     # initialize model
     if existing_ckpt is not None:
