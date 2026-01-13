@@ -25,8 +25,8 @@ from pathlib import Path
 import polars as pl
 
 INPUT_DATA_DIR = Path("/content/drive/MyDrive/NGS/NFL/REG/")
-OUTPUT_DATA_DIR = Path("data/split_prepped_data_extra/")
-DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache") # Google Drive directory for caching (optional)
+OUTPUT_DATA_DIR = Path("data/split_prepped_data_extra_gamestate/")
+DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate") # Google Drive directory for caching (optional)
 
 # Weeks to read
 WEEKS_TO_READ = ["06", "07"]
@@ -105,8 +105,12 @@ def map_column_names(df: pl.DataFrame) -> pl.DataFrame:
         vel_x -> vx (already Cartesian)
         vel_y -> vy (already Cartesian)
         vel -> s (speed magnitude)
+        down -> down (if exists)
+        quarter -> quarter (if exists)
+        game_clock -> gameClock (if exists)
     """
-    return df.rename({
+    # Base mappings
+    rename_dict = {
         "gamekey": "gameId",
         "playid": "playId",
         "nfl_id": "nflId",
@@ -119,7 +123,17 @@ def map_column_names(df: pl.DataFrame) -> pl.DataFrame:
         "vel_y": "vy",
         "vel": "s",
         "roster_position": "position",
-    })
+    }
+
+    # Add game state mappings if columns exist
+    if "down" in df.columns:
+        rename_dict["down"] = "down"
+    if "quarter" in df.columns:
+        rename_dict["quarter"] = "quarter"
+    if "game_clock" in df.columns:
+        rename_dict["game_clock"] = "gameClock"
+
+    return df.rename(rename_dict)
 
 
 def filter_tracking_data(df: pl.DataFrame) -> pl.DataFrame:
@@ -280,6 +294,39 @@ def add_derived_features(df: pl.DataFrame) -> pl.DataFrame:
     df = df.with_columns(
         distanceToGoal=(100 - pl.col("line_of_scrimmage")).cast(pl.Float64)
     )
+
+    # Calculate half_seconds_remaining if gameClock and quarter are available
+    if "gameClock" in df.columns and "quarter" in df.columns:
+        # Parse gameClock (format: "MM:SS") and convert to seconds
+        # Quarters 1-2 are first half, 3-4 are second half
+        # Each quarter is 15 minutes (900 seconds)
+        df = df.with_columns(
+            # Split clock into minutes and seconds
+            clock_parts=pl.col("gameClock").str.split(":"),
+        ).with_columns(
+            # Extract minutes and seconds
+            clock_minutes=pl.col("clock_parts").list.get(0).cast(pl.Int32),
+            clock_seconds=pl.col("clock_parts").list.get(1).cast(pl.Int32),
+        ).with_columns(
+            # Convert to seconds remaining in quarter
+            quarter_seconds_remaining=(pl.col("clock_minutes") * 60 + pl.col("clock_seconds")),
+        ).with_columns(
+            # Calculate half_seconds_remaining based on quarter
+            # Q1: add 900 seconds (Q2 time) to current quarter time
+            # Q2: just use current quarter time
+            # Q3: add 900 seconds (Q4 time) to current quarter time
+            # Q4: just use current quarter time
+            half_seconds_remaining=pl.when(pl.col("quarter") == 1)
+            .then(pl.col("quarter_seconds_remaining") + 900)
+            .when(pl.col("quarter") == 2)
+            .then(pl.col("quarter_seconds_remaining"))
+            .when(pl.col("quarter") == 3)
+            .then(pl.col("quarter_seconds_remaining") + 900)
+            .when(pl.col("quarter") == 4)
+            .then(pl.col("quarter_seconds_remaining"))
+            .otherwise(pl.lit(None))
+            .cast(pl.Float64)
+        ).drop(["clock_parts", "clock_minutes", "clock_seconds", "quarter_seconds_remaining"])
 
     return df
 

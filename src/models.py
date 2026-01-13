@@ -303,7 +303,9 @@ class LitModel(LightningModule):
         super().__init__()
         self.model_type = model_type.lower()
         self.model_class = SportsTransformer if self.model_type == "transformer" else TheZooArchitecture
-        self.feature_len = 6 if self.model_type == "transformer" else 10
+        # Transformer: 6 player features + 5 game state features = 11
+        # Zoo: 10 features (keeps original)
+        self.feature_len = 11 if self.model_type == "transformer" else 10
 
         # Initialize model with architecture-specific parameters
         self.model = self.model_class(

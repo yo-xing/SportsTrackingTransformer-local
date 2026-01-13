@@ -25,9 +25,9 @@ np.random.seed(42)
 random.seed(42)
 
 # Default directories (can be overridden via CLI)
-PREPPED_DATA_DIR = Path("data/split_prepped_data_extra/")
-DATASET_DIR = Path("data/datasets_extra/")
-DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache") # Google Drive directory for caching (optional)
+PREPPED_DATA_DIR = Path("data/split_prepped_data_extra_gamestate/")
+DATASET_DIR = Path("data/datasets_extra_gamestate/")
+DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate") # Google Drive directory for caching (optional)
 
 # Yards gained classification constants
 # Class 0 = -10 yards, Class 109 = +99 yards
@@ -159,9 +159,15 @@ class BDB2024_Dataset(Dataset):
         return y
 
     def transformer_transform_input_frame_df(self, frame_df: pd.DataFrame) -> np.ndarray:
-        features = ["x_rel", "y_rel", "vx", "vy", "side", "is_ball_carrier"]
-        x = frame_df[features].to_numpy(dtype=np.float32)
-        assert x.shape == (22, len(features)), f"Expected shape (22, {len(features)}), got {x.shape}"
+        # Player-specific features (6) + Game state features (5) = 11 total
+        features = [
+            "x_rel", "y_rel", "vx", "vy", "side", "is_ball_carrier",
+            "yardsToGo", "down", "distanceToGoal", "quarter", "half_seconds_remaining"
+        ]
+        # Only use features that exist in the dataframe
+        available_features = [f for f in features if f in frame_df.columns]
+        x = frame_df[available_features].to_numpy(dtype=np.float32)
+        assert x.shape == (22, len(available_features)), f"Expected shape (22, {len(available_features)}), got {x.shape}"
         return x
 
     def zoo_transform_input_frame_df(self, frame_df: pd.DataFrame) -> np.ndarray:

@@ -47,13 +47,13 @@ def main():
     print("Transformer-Only Training Pipeline")
     print("="*60 + "\n")
 
-    # Use separate cache directories for full 18-week data
-    # This prevents overwriting the 2-week cache used by regular DVC pipeline
-    drive_cache_prep = "/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_full18weeks"
-    drive_cache_datasets = "/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_full18weeks"
-    local_output_prep = "data/split_prepped_data_extra_full18weeks"
-    local_output_datasets = "data/datasets_extra_full18weeks"
-    local_output_models = "models_full18weeks"
+    # Use separate cache directories for game state feature training
+    # This prevents overwriting existing caches
+    drive_cache_prep = "/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate"
+    drive_cache_datasets = "/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate"
+    local_output_prep = "data/split_prepped_data_extra_gamestate"
+    local_output_datasets = "data/datasets_extra_gamestate"
+    local_output_models = "models_gamestate"
 
     # Stage 1: Prepare extra data (with all 18 weeks)
     if not args.skip_prep:
@@ -93,7 +93,7 @@ def main():
     )
 
     # Stage 4: Backup trained models to Google Drive
-    drive_models_dir = "/content/drive/MyDrive/SportsTrackingTransformer/models_full18weeks"
+    drive_models_dir = "/content/drive/MyDrive/SportsTrackingTransformer/models_gamestate"
     from pathlib import Path
     if Path("/content/drive/MyDrive").exists():
         print("\n" + "="*60)
