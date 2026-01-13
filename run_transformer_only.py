@@ -34,10 +34,11 @@ def run_command(cmd: str, description: str):
 
 def main():
     parser = ArgumentParser(description="Run transformer-only training pipeline")
-    parser.add_argument("--force", action="store_true", help="Force recompute all stages")
+    parser.add_argument("--force", action="store_true", help="Force recompute all stages (deletes caches)")
     parser.add_argument("--skip-prep", action="store_true", help="Skip data preparation")
     parser.add_argument("--skip-precompute", action="store_true", help="Skip feature precomputation")
     parser.add_argument("--sample", type=float, default=None, help="Sample fraction of data (e.g., 0.1 for 10%%)")
+    parser.add_argument("--retrain", action="store_true", help="Delete existing model checkpoints before training")
     args = parser.parse_args()
 
     force_flag = "--force" if args.force else ""
@@ -75,6 +76,25 @@ def main():
                 shutil.rmtree(cache_dir)
 
         print("\n✓ Cache directories deleted\n")
+
+    # If retrain flag is set, delete existing model checkpoints
+    if args.retrain:
+        print("\n🔄 Retrain flag set - deleting existing model checkpoints...\n")
+        import shutil
+        from pathlib import Path
+
+        # Delete local models
+        if Path(local_output_models).exists():
+            print(f"  Deleting {local_output_models}")
+            shutil.rmtree(local_output_models)
+
+        # Delete Google Drive models if mounted
+        drive_models_path = Path(drive_models_dir)
+        if drive_models_path.exists():
+            print(f"  Deleting {drive_models_dir}")
+            shutil.rmtree(drive_models_dir)
+
+        print("\n✓ Model checkpoints deleted\n")
 
     # Stage 1: Prepare extra data (with all 18 weeks)
     if not args.skip_prep:
