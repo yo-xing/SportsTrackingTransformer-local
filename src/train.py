@@ -377,6 +377,7 @@ if __name__ == "__main__":
         "--model_type", type=str, default="transformer", help="Type of model to train ('transformer' or 'zoo')"
     )
     parser.add_argument("--patience", "-P", type=int, default=4, help="Early stopping patience")
+    parser.add_argument("--prepped-data-dir", type=str, help="Prepped data directory (default: data/split_prepped_data_extra)")
     parser.add_argument("--dataset-dir", type=str, help="Dataset directory (default: data/datasets_extra)")
     parser.add_argument("--models-dir", type=str, help="Models output directory (default: models)")
     parser.add_argument("--batch-size", type=int, default=128, help="Training batch size (default: 128)")
@@ -384,9 +385,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Override global paths if provided
-    if args.dataset_dir:
+    if args.prepped_data_dir or args.dataset_dir:
         import datasets
-        datasets.DATASET_DIR = Path(args.dataset_dir)
+        if args.prepped_data_dir:
+            datasets.PREPPED_DATA_DIR = Path(args.prepped_data_dir)
+            print(f"Using custom prepped data path: {datasets.PREPPED_DATA_DIR}")
+        if args.dataset_dir:
+            datasets.DATASET_DIR = Path(args.dataset_dir)
+            print(f"Using custom dataset path: {datasets.DATASET_DIR}")
     if args.models_dir:
         MODELS_PATH = Path(args.models_dir)
         MODELS_PATH.mkdir(exist_ok=True, parents=True)
