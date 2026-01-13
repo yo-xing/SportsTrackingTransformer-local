@@ -26,12 +26,13 @@ uv run python src/prep_extra_data.py \
 echo "✓ Data preparation complete"
 echo ""
 
-# Stage 2: Precompute datasets
-echo "Stage 2/3: Precomputing feature transforms..."
+# Stage 2: Precompute datasets (transformer only, skip zoo)
+echo "Stage 2/3: Precomputing feature transforms (transformer only)..."
 uv run python src/datasets.py \
   --prepped-data-dir "$LOCAL_OUTPUT_PREP" \
   --dataset-dir "$LOCAL_OUTPUT_DATASETS" \
-  --drive-dir "$DRIVE_CACHE_DATASETS"
+  --drive-dir "$DRIVE_CACHE_DATASETS" \
+  --model-types transformer
 echo "✓ Feature precomputation complete"
 echo ""
 

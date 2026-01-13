@@ -341,6 +341,7 @@ def main(
     prepped_data_dir: Path = PREPPED_DATA_DIR,
     dataset_dir: Path = DATASET_DIR,
     drive_dir: Path | None = None,
+    model_types: list[str] = None,
 ):
     """
     Main execution function for dataset creation.
@@ -349,19 +350,25 @@ def main(
         prepped_data_dir: Directory containing preprocessed parquet files
         dataset_dir: Directory to output dataset pickle files
         drive_dir: Optional Google Drive directory for caching datasets
+        model_types: List of model types to precompute (default: ["zoo", "transformer"])
     """
     global PREPPED_DATA_DIR, DATASET_DIR, DRIVE_DIR
     PREPPED_DATA_DIR = prepped_data_dir
     DATASET_DIR = dataset_dir
     DRIVE_DIR = drive_dir
 
+    if model_types is None:
+        model_types = ["zoo", "transformer"]
+
     if DRIVE_DIR is not None:
         print(f"Google Drive caching enabled: {DRIVE_DIR}")
+
+    print(f"Precomputing datasets for: {', '.join(model_types)}")
 
     for split in ["test", "val", "train"]:
         # Check if all model types for this split are cached
         all_cached = True
-        for model_type in ["zoo", "transformer"]:
+        for model_type in model_types:
             out_dir = DATASET_DIR / model_type
             out_dir.mkdir(exist_ok=True, parents=True)
             local_path = out_dir / f"{split}_dataset.pkl"
@@ -380,7 +387,7 @@ def main(
         feature_df = _read_features(split)
         tgt_df = _read_targets(split)
 
-        for model_type in ["zoo", "transformer"]:
+        for model_type in model_types:
             out_dir = DATASET_DIR / model_type
             local_path = out_dir / f"{split}_dataset.pkl"
 
@@ -435,10 +442,19 @@ if __name__ == "__main__":
         default=DRIVE_DIR,
         help="Google Drive directory for caching datasets (e.g., /content/drive/MyDrive/datasets)",
     )
+    parser.add_argument(
+        "--model-types",
+        type=str,
+        nargs="+",
+        default=["zoo", "transformer"],
+        choices=["zoo", "transformer"],
+        help="Model types to precompute datasets for (default: zoo transformer)",
+    )
     args = parser.parse_args()
 
     main(
         prepped_data_dir=args.prepped_data_dir,
         dataset_dir=args.dataset_dir,
         drive_dir=args.drive_dir,
+        model_types=args.model_types,
     )

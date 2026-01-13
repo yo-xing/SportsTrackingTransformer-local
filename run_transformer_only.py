@@ -65,14 +65,15 @@ def main():
     else:
         print("\n⏭️  Skipping data preparation stage\n")
 
-    # Stage 2: Precompute datasets
+    # Stage 2: Precompute datasets (transformer only, skip zoo)
     if not args.skip_precompute:
         run_command(
             f"uv run python src/datasets.py "
             f"--prepped-data-dir {local_output_prep} "
             f"--dataset-dir {local_output_datasets} "
-            f"--drive-dir {drive_cache_datasets}",
-            "Stage 2/3: Precomputing feature transforms"
+            f"--drive-dir {drive_cache_datasets} "
+            f"--model-types transformer",
+            "Stage 2/3: Precomputing feature transforms (transformer only)"
         )
     else:
         print("\n⏭️  Skipping feature precomputation stage\n")
