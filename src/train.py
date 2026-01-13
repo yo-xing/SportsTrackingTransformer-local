@@ -29,7 +29,8 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from datasets import BDB2024_Dataset, load_datasets, MIN_YARDS, NUM_YARDS_CLASSES, PREPPED_DATA_DIR
+import datasets
+from datasets import BDB2024_Dataset, load_datasets, MIN_YARDS, NUM_YARDS_CLASSES
 from models import LitModel
 
 # Use Google Drive for checkpoints if available (Colab), otherwise local
@@ -107,7 +108,7 @@ def predict_model_as_df(model: LitModel = None, ckpt_path: Path = None, devices=
         predicted_class = logits.argmax(axis=1)
 
         # Prepare metadata - load target data from parquet since tgt_df_partition is cleared
-        tgt_df = pl.read_parquet(PREPPED_DATA_DIR / f"{split}_targets.parquet")
+        tgt_df = pl.read_parquet(datasets.PREPPED_DATA_DIR / f"{split}_targets.parquet")
 
         dataset: BDB2024_Dataset = dataloader.dataset
         ds_keys = np.array(dataset.keys)
@@ -385,14 +386,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Override global paths if provided
-    if args.prepped_data_dir or args.dataset_dir:
-        import datasets
-        if args.prepped_data_dir:
-            datasets.PREPPED_DATA_DIR = Path(args.prepped_data_dir)
-            print(f"Using custom prepped data path: {datasets.PREPPED_DATA_DIR}")
-        if args.dataset_dir:
-            datasets.DATASET_DIR = Path(args.dataset_dir)
-            print(f"Using custom dataset path: {datasets.DATASET_DIR}")
+    if args.prepped_data_dir:
+        datasets.PREPPED_DATA_DIR = Path(args.prepped_data_dir)
+        print(f"Using custom prepped data path: {datasets.PREPPED_DATA_DIR}")
+    if args.dataset_dir:
+        datasets.DATASET_DIR = Path(args.dataset_dir)
+        print(f"Using custom dataset path: {datasets.DATASET_DIR}")
     if args.models_dir:
         MODELS_PATH = Path(args.models_dir)
         MODELS_PATH.mkdir(exist_ok=True, parents=True)
