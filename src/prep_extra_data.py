@@ -484,7 +484,8 @@ def filter_null_features(df: pl.DataFrame) -> pl.DataFrame:
     filtered in add_relative_positions().
     """
     # Only check columns that exist in the Axially format
-    # Note: 'a' (acceleration) doesn't exist in Axially data, we have 'accel' instead
+    # Note: Axially data has 'accel' (acceleration magnitude) instead of 'a'
+    # We check vx, vy since those are used by the model
     feature_cols = [col for col in ["x", "y", "s", "o", "dir", "vx", "vy"] if col in df.columns]
 
     # Count rows before filtering
