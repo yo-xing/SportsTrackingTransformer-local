@@ -363,6 +363,8 @@ def main(args):
 
 
 if __name__ == "__main__":
+    global MODELS_PATH
+
     parser = ArgumentParser()
     parser.add_argument("--device", type=int, default=-1, help="GPU device to use (-1 for CPU)")
     parser.add_argument(
@@ -388,7 +390,6 @@ if __name__ == "__main__":
         import datasets
         datasets.DATASET_DIR = Path(args.dataset_dir)
     if args.models_dir:
-        global MODELS_PATH
         MODELS_PATH = Path(args.models_dir)
         MODELS_PATH.mkdir(exist_ok=True, parents=True)
         print(f"Using custom models path: {MODELS_PATH}")
