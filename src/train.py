@@ -363,8 +363,6 @@ def main(args):
 
 
 if __name__ == "__main__":
-    global MODELS_PATH
-
     parser = ArgumentParser()
     parser.add_argument("--device", type=int, default=-1, help="GPU device to use (-1 for CPU)")
     parser.add_argument(
