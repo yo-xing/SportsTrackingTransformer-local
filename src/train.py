@@ -236,8 +236,18 @@ def train_model(
         if ckpts:
             # Find the checkpoint with the lowest val_loss
             best_ckpt = min(ckpts, key=lambda x: get_epoch_val_loss_from_ckpt(x)[1])
-            existing_ckpt = str(best_ckpt)
-            print(f"Resuming training from best checkpoint: {existing_ckpt}")
+            _, best_val_loss = get_epoch_val_loss_from_ckpt(best_ckpt)
+
+            # Skip checkpoint if val_loss is NaN or inf
+            if not (np.isnan(best_val_loss) or np.isinf(best_val_loss)):
+                existing_ckpt = str(best_ckpt)
+                print(f"Resuming training from best checkpoint: {existing_ckpt}")
+            else:
+                print(f"Found checkpoint with NaN/inf loss, starting fresh training instead")
+                # Delete the bad checkpoint
+                for ckpt in ckpts:
+                    print(f"Deleting bad checkpoint: {ckpt}")
+                    ckpt.unlink()
 
     # initialize model
     if existing_ckpt is not None:
