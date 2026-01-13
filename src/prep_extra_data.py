@@ -45,12 +45,15 @@ OUTPUT_FILES = [
 ]
 
 
-def load_extra_data() -> pl.DataFrame:
+def load_extra_data(sample_fraction: float = None) -> pl.DataFrame:
     """
     Load parquet files from specified weeks only.
     Expected structure: /content/drive/MyDrive/NGS/NFL/REG/Week XX/*.parquet
 
     Skips *_mirror.parquet files since we do our own mirroring.
+
+    Args:
+        sample_fraction: If provided, randomly sample this fraction of files (e.g., 0.1 for 10%)
 
     Returns:
         pl.DataFrame: Combined tracking data from specified weeks.
@@ -67,7 +70,15 @@ def load_extra_data() -> pl.DataFrame:
     if not parquet_files:
         raise FileNotFoundError(f"No parquet files found in {INPUT_DATA_DIR} for weeks {WEEKS_TO_READ}")
 
-    print(f"Found {len(parquet_files)} parquet files from weeks {WEEKS_TO_READ} (excluding _mirror files)")
+    # Sample files if requested
+    if sample_fraction is not None:
+        import random
+        random.seed(42)  # For reproducibility
+        n_sample = max(1, int(len(parquet_files) * sample_fraction))
+        parquet_files = random.sample(parquet_files, n_sample)
+        print(f"Sampling {n_sample}/{len(parquet_files)} files ({sample_fraction*100:.0f}%) from weeks {WEEKS_TO_READ}")
+    else:
+        print(f"Found {len(parquet_files)} parquet files from weeks {WEEKS_TO_READ} (excluding _mirror files)")
 
     dfs = []
     for f in parquet_files:
@@ -644,8 +655,15 @@ def _save_to_drive():
             shutil.copy2(local_path, drive_path)
 
 
-def main(output_dir: Path = OUTPUT_DATA_DIR, drive_dir: Path | None = None, weeks: list[str] | None = None):
-    """Main execution function for extra data preparation."""
+def main(output_dir: Path = OUTPUT_DATA_DIR, drive_dir: Path | None = None, weeks: list[str] | None = None, sample_fraction: float = None):
+    """Main execution function for extra data preparation.
+
+    Args:
+        output_dir: Directory to write output files
+        drive_dir: Google Drive directory for caching
+        weeks: List of week numbers to process
+        sample_fraction: Fraction of files to randomly sample (e.g., 0.1 for 10%)
+    """
     global OUTPUT_DATA_DIR, DRIVE_DIR, WEEKS_TO_READ
     OUTPUT_DATA_DIR = output_dir
     DRIVE_DIR = drive_dir
@@ -654,6 +672,9 @@ def main(output_dir: Path = OUTPUT_DATA_DIR, drive_dir: Path | None = None, week
     if weeks is not None:
         WEEKS_TO_READ = weeks
         print(f"Using custom weeks: {WEEKS_TO_READ}")
+
+    if sample_fraction is not None:
+        print(f"Sampling {sample_fraction*100:.0f}% of files per week")
 
     if DRIVE_DIR is not None:
         print(f"Google Drive caching enabled: {DRIVE_DIR}")
@@ -664,7 +685,7 @@ def main(output_dir: Path = OUTPUT_DATA_DIR, drive_dir: Path | None = None, week
             return
 
     print("Loading extra data...")
-    df = load_extra_data()
+    df = load_extra_data(sample_fraction=sample_fraction)
     print(f"Loaded {len(df)} rows")
 
     print("\nMapping column names...")
@@ -735,6 +756,12 @@ if __name__ == "__main__":
         nargs="+",
         help="Weeks to process (e.g., --weeks 01 02 03). If not specified, uses default from WEEKS_TO_READ.",
     )
+    parser.add_argument(
+        "--sample",
+        type=float,
+        default=None,
+        help="Sample fraction of files to process (e.g., 0.1 for 10%%). Useful for testing.",
+    )
     args = parser.parse_args()
 
-    main(output_dir=args.output_dir, drive_dir=args.drive_dir, weeks=args.weeks)
+    main(output_dir=args.output_dir, drive_dir=args.drive_dir, weeks=args.weeks, sample_fraction=args.sample)

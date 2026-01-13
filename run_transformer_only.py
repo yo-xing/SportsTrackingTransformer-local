@@ -37,9 +37,11 @@ def main():
     parser.add_argument("--force", action="store_true", help="Force recompute all stages")
     parser.add_argument("--skip-prep", action="store_true", help="Skip data preparation")
     parser.add_argument("--skip-precompute", action="store_true", help="Skip feature precomputation")
+    parser.add_argument("--sample", type=float, default=None, help="Sample fraction of data (e.g., 0.1 for 10%%)")
     args = parser.parse_args()
 
     force_flag = "--force" if args.force else ""
+    sample_flag = f"--sample {args.sample}" if args.sample else ""
 
     print("\n" + "="*60)
     print("Transformer-Only Training Pipeline")
@@ -57,10 +59,11 @@ def main():
     if not args.skip_prep:
         # Use all 18 weeks for full dataset training
         all_weeks = " ".join([f"{i:02d}" for i in range(1, 19)])
+        sample_desc = f" ({args.sample*100:.0f}% sample)" if args.sample else ""
         run_command(
             f"uv run python src/prep_extra_data.py --weeks {all_weeks} "
-            f"--output-dir {local_output_prep} --drive-dir {drive_cache_prep}",
-            "Stage 1/3: Preparing extra data (18 weeks)"
+            f"--output-dir {local_output_prep} --drive-dir {drive_cache_prep} {sample_flag}",
+            f"Stage 1/3: Preparing extra data (18 weeks{sample_desc})"
         )
     else:
         print("\n⏭️  Skipping data preparation stage\n")
