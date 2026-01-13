@@ -460,6 +460,38 @@ def filter_complete_plays(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
+def filter_null_features(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Filter out frames with null values in feature columns.
+    Null values cause NaN loss during training.
+    """
+    feature_cols = ["x", "y", "s", "a", "o", "dir"]
+
+    # Count rows before filtering
+    rows_before = len(df)
+    plays_before = df.select(["gameId", "playId", "mirrored"]).n_unique()
+
+    # Filter out rows with any null in feature columns
+    for col in feature_cols:
+        df = df.filter(pl.col(col).is_not_null())
+
+    # Filter out rows with inf values
+    for col in feature_cols:
+        df = df.filter(pl.col(col).is_finite())
+
+    rows_after = len(df)
+    plays_after = df.select(["gameId", "playId", "mirrored"]).n_unique()
+
+    rows_lost = rows_before - rows_after
+    plays_lost = plays_before - plays_after
+
+    if rows_lost > 0:
+        print(f"Filtered out {rows_lost}/{rows_before} rows ({rows_lost/rows_before:.2%}) with null/inf features")
+        print(f"Lost {plays_lost}/{plays_before} plays ({plays_lost/plays_before:.2%})")
+
+    return df
+
+
 def get_yards_gained_target_df(df: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     """
     Generate target dataframe for yards gained prediction.
@@ -658,6 +690,9 @@ def main(output_dir: Path = OUTPUT_DATA_DIR, drive_dir: Path | None = None, week
 
     print("\nFiltering plays with incomplete rosters...")
     df = filter_complete_plays(df)
+
+    print("\nFiltering frames with null/inf features...")
+    df = filter_null_features(df)
 
     print("\nGenerating targets...")
     target_df, df = get_yards_gained_target_df(df)
