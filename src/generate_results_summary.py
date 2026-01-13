@@ -28,8 +28,10 @@ Outputs:
 
 Usage:
     uv run python src/generate_results_summary.py
+    uv run python src/generate_results_summary.py --models-dir models_gamestate --prepped-data-dir data/split_prepped_data_extra_gamestate --num-features 11
 """
 
+import argparse
 import json
 import re
 from pathlib import Path
@@ -46,25 +48,10 @@ from models import LitModel
 RESULTS_DIR = Path("results")
 RESULTS_DIR.mkdir(exist_ok=True)
 
-# Use Google Drive for models if available (Colab), otherwise local
-GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models")
-LOCAL_MODELS_PATH = Path("models")
-
-if GDRIVE_MODELS_PATH.parent.exists():
-    MODELS_BASE_DIR = GDRIVE_MODELS_PATH
-    print(f"Using Google Drive for models: {MODELS_BASE_DIR}")
-else:
-    MODELS_BASE_DIR = LOCAL_MODELS_PATH
-    print(f"Using local path for models: {MODELS_BASE_DIR}")
-
-MODELS_DIR = MODELS_BASE_DIR / "best_models"
-ZOO_RESULTS = MODELS_DIR / "zoo" / "best_model_results.parquet"
-TRANSFORMER_RESULTS = MODELS_DIR / "transformer" / "best_model_results.parquet"
-ZOO_CHECKPOINT = MODELS_DIR / "zoo" / "best_model.ckpt"
-TRANSFORMER_CHECKPOINT = MODELS_DIR / "transformer" / "best_model.ckpt"
-
-# Use extra data paths
-PREPPED_DATA_DIR = Path("data/split_prepped_data_extra")
+# Global config - set by parse_args()
+MODELS_BASE_DIR = None
+PREPPED_DATA_DIR = None
+NUM_FEATURES = 6  # Number of features for transformer (will be set by args)
 
 
 def generate_results_if_missing(checkpoint_path: Path, results_path: Path, model_type: str):
@@ -86,26 +73,29 @@ def generate_results_if_missing(checkpoint_path: Path, results_path: Path, model
 
 
 def load_results() -> pl.DataFrame:
-    """Load and combine results from both models, including per-frame events from tracking data."""
-    # Generate results if missing
-    if ZOO_CHECKPOINT.exists():
-        generate_results_if_missing(ZOO_CHECKPOINT, ZOO_RESULTS, "zoo")
-    if TRANSFORMER_CHECKPOINT.exists():
-        generate_results_if_missing(TRANSFORMER_CHECKPOINT, TRANSFORMER_RESULTS, "transformer")
-
+    """Load and combine results from all models, including per-frame events from tracking data."""
     print("Loading model results...")
+
+    # Find all .results.parquet files in the models directory
+    results_files = list(MODELS_BASE_DIR.glob("**/*.results.parquet"))
+
+    if not results_files:
+        raise FileNotFoundError(f"No .results.parquet files found in {MODELS_BASE_DIR}. Please train models first.")
+
+    print(f"  Found {len(results_files)} results files")
+
+    # Load and combine all results
     results_dfs = []
-    if ZOO_RESULTS.exists():
-        results_dfs.append(pl.read_parquet(ZOO_RESULTS))
-    else:
-        print("Warning: Zoo results not found, skipping")
-    if TRANSFORMER_RESULTS.exists():
-        results_dfs.append(pl.read_parquet(TRANSFORMER_RESULTS))
-    else:
-        print("Warning: Transformer results not found, skipping")
+    for results_file in results_files:
+        try:
+            df = pl.read_parquet(results_file)
+            results_dfs.append(df)
+            print(f"  Loaded: {results_file.relative_to(MODELS_BASE_DIR)}")
+        except Exception as e:
+            print(f"  Warning: Failed to load {results_file}: {e}")
 
     if not results_dfs:
-        raise FileNotFoundError("No results files found. Please train models first.")
+        raise FileNotFoundError("Failed to load any results files.")
 
     results_df = pl.concat(results_dfs, how="diagonal")
 
@@ -388,7 +378,7 @@ def find_all_model_checkpoints() -> list[dict]:
     Returns:
         list[dict]: List of config dicts with model_type, model_dim, num_layers, and best checkpoint path.
     """
-    models_base = Path("models")
+    models_base = MODELS_BASE_DIR
     configs = []
 
     for model_type in ["zoo", "transformer"]:
@@ -467,7 +457,7 @@ def compute_model_metrics(checkpoint_path: str, model_type: str) -> dict:
 
     # Create dummy input shape
     if model_type == "transformer":
-        input_shape = (1, 22, 6)
+        input_shape = (1, 22, NUM_FEATURES)
     else:  # zoo
         input_shape = (1, 10, 11, 10)
 
@@ -605,9 +595,42 @@ def generate_model_scaling_plot(model_comparison: list[dict]) -> None:
     print(f"  Saved: {plot_path}")
 
 
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Generate results summary and analysis")
+    parser.add_argument("--models-dir", type=str, default="models", help="Models directory (default: models)")
+    parser.add_argument("--prepped-data-dir", type=str, default="data/split_prepped_data_extra",
+                       help="Prepared data directory (default: data/split_prepped_data_extra)")
+    parser.add_argument("--num-features", type=int, default=6,
+                       help="Number of input features for transformer (default: 6)")
+    return parser.parse_args()
+
+
 def main():
     """Generate results summary."""
-    print("=" * 60)
+    global MODELS_BASE_DIR, PREPPED_DATA_DIR, NUM_FEATURES
+
+    args = parse_args()
+
+    # Set global config from args
+    NUM_FEATURES = args.num_features
+    PREPPED_DATA_DIR = Path(args.prepped_data_dir)
+
+    # Determine models base directory (check Google Drive first)
+    gdrive_models_path = Path(f"/content/drive/MyDrive/SportsTrackingTransformer/{args.models_dir}")
+    local_models_path = Path(args.models_dir)
+
+    if gdrive_models_path.exists():
+        MODELS_BASE_DIR = gdrive_models_path
+        print(f"Using Google Drive for models: {MODELS_BASE_DIR}")
+    else:
+        MODELS_BASE_DIR = local_models_path
+        print(f"Using local path for models: {MODELS_BASE_DIR}")
+
+    print(f"Using prepped data from: {PREPPED_DATA_DIR}")
+    print(f"Transformer input features: {NUM_FEATURES}")
+
+    print("\n" + "=" * 60)
     print("GENERATING RESULTS")
     print("=" * 60)
 

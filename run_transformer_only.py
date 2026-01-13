@@ -130,7 +130,7 @@ def main():
         f"--prepped-data-dir {local_output_prep} "
         f"--dataset-dir {local_output_datasets} --models-dir {local_output_models} "
         f"--batch-size 256 --num-workers 16",
-        "Stage 3/3: Training transformer models"
+        "Stage 3/5: Training transformer models"
     )
 
     # Stage 4: Backup trained models to Google Drive
@@ -138,7 +138,7 @@ def main():
     from pathlib import Path
     if Path("/content/drive/MyDrive").exists():
         print("\n" + "="*60)
-        print("Stage 4/4: Backing up models to Google Drive")
+        print("Stage 4/5: Backing up models to Google Drive")
         print("="*60 + "\n")
 
         Path(drive_models_dir).mkdir(exist_ok=True, parents=True)
@@ -156,6 +156,15 @@ def main():
             print(f"⚠️  No transformer models found at {local_transformer_dir}\n")
     else:
         print("\nGoogle Drive not mounted, skipping model backup\n")
+
+    # Stage 5: Generate results summary
+    run_command(
+        f"uv run python src/generate_results_summary.py "
+        f"--models-dir {local_output_models} "
+        f"--prepped-data-dir {local_output_prep} "
+        f"--num-features 11",
+        "Stage 5/5: Generating results summary"
+    )
 
     print("\n" + "="*60)
     print("Pipeline Complete! 🎉")
