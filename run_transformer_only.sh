@@ -48,12 +48,35 @@ uv run python src/train.py --model_type transformer --device 0 \
 echo "✓ Transformer training complete"
 echo ""
 
+# Stage 4: Backup trained models to Google Drive
+DRIVE_MODELS_DIR="/content/drive/MyDrive/SportsTrackingTransformer/models_full18weeks"
+if [ -d "/content/drive/MyDrive" ]; then
+  echo "Stage 4/4: Backing up models to Google Drive..."
+  mkdir -p "$DRIVE_MODELS_DIR"
+
+  if [ -d "$LOCAL_OUTPUT_MODELS/transformer" ]; then
+    echo "Copying models to $DRIVE_MODELS_DIR/transformer/"
+    rsync -av --progress "$LOCAL_OUTPUT_MODELS/transformer/" "$DRIVE_MODELS_DIR/transformer/"
+    echo "✓ Models backed up to Google Drive"
+  else
+    echo "⚠️  No transformer models found to backup"
+  fi
+  echo ""
+else
+  echo "Google Drive not mounted, skipping model backup"
+  echo ""
+fi
+
 echo "========================================="
 echo "Pipeline Complete!"
 echo "========================================="
 echo ""
-echo "Trained models are in: models/transformer/"
+echo "Trained models are in:"
+echo "  - Local: $LOCAL_OUTPUT_MODELS/transformer/"
+if [ -d "/content/drive/MyDrive" ]; then
+  echo "  - Google Drive: $DRIVE_MODELS_DIR/transformer/"
+fi
 echo ""
 echo "Next steps:"
+echo "  - To compare models: python compare_2week_vs_full.py"
 echo "  - To generate results: uv run dvc repro generate_results"
-echo "  - To pick best model: uv run dvc repro pick_best_models"

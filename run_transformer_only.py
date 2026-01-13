@@ -87,16 +87,45 @@ def main():
         "Stage 3/3: Training transformer models"
     )
 
+    # Stage 4: Backup trained models to Google Drive
+    drive_models_dir = "/content/drive/MyDrive/SportsTrackingTransformer/models_full18weeks"
+    from pathlib import Path
+    if Path("/content/drive/MyDrive").exists():
+        print("\n" + "="*60)
+        print("Stage 4/4: Backing up models to Google Drive")
+        print("="*60 + "\n")
+
+        Path(drive_models_dir).mkdir(exist_ok=True, parents=True)
+
+        local_transformer_dir = Path(local_output_models) / "transformer"
+        if local_transformer_dir.exists():
+            import subprocess
+            print(f"Copying models to {drive_models_dir}/transformer/")
+            subprocess.run(
+                ["rsync", "-av", "--progress", f"{local_transformer_dir}/", f"{drive_models_dir}/transformer/"],
+                check=True
+            )
+            print("✓ Models backed up to Google Drive\n")
+        else:
+            print(f"⚠️  No transformer models found at {local_transformer_dir}\n")
+    else:
+        print("\nGoogle Drive not mounted, skipping model backup\n")
+
     print("\n" + "="*60)
     print("Pipeline Complete! 🎉")
     print("="*60 + "\n")
-    print(f"Trained models are in: {local_output_models}/transformer/\n")
-    print("Cache locations:")
+    print("Trained models are in:")
+    print(f"  - Local: {local_output_models}/transformer/")
+    if Path("/content/drive/MyDrive").exists():
+        print(f"  - Google Drive: {drive_models_dir}/transformer/")
+    print("\nCache locations:")
     print(f"  - Prep data cache: {drive_cache_prep}")
     print(f"  - Dataset cache: {drive_cache_datasets}")
     print(f"  - Local prep data: {local_output_prep}")
     print(f"  - Local datasets: {local_output_datasets}\n")
     print("Note: These are separate from the 2-week DVC pipeline caches.\n")
+    print("Next steps:")
+    print("  - To compare models: python compare_2week_vs_full.py\n")
 
 
 if __name__ == "__main__":
