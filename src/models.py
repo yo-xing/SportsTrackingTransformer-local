@@ -119,6 +119,7 @@ class SportsTransformer(nn.Module):
         """
         # x: [B: batch_size, P: # of players, F: feature_len]
         B, P, F = x.size()
+        print(f"[DEBUG] Input shape: {x.shape}, Expected feature_len: {self.feature_norm_layer.num_features}")
 
         # Normalize features
         x = self.feature_norm_layer(x.permute(0, 2, 1)).permute(0, 2, 1)  # [B,P,F] -> [B,P,F]
