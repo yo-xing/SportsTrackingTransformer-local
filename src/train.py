@@ -220,6 +220,7 @@ def train_model(
         unless skip_existing=True in which case training is skipped entirely.
     """
     # Set up logger and trainer for full run
+    print(f"[DEBUG] MODELS_PATH = {MODELS_PATH}")
     logger = TensorBoardLogger(
         save_dir=MODELS_PATH,
         name=model_type,
@@ -230,6 +231,7 @@ def train_model(
 
     # Check for existing checkpoint with best val_loss
     ckpt_dir = Path(logger.log_dir) / "checkpoints"
+    print(f"[DEBUG] Checkpoint directory: {ckpt_dir}")
     existing_ckpt = None
     if ckpt_dir.exists():
         ckpts = list(ckpt_dir.glob("*.ckpt"))
