@@ -397,6 +397,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Override global paths if provided
+    global MODELS_PATH
     if args.prepped_data_dir:
         datasets.PREPPED_DATA_DIR = Path(args.prepped_data_dir)
         print(f"Using custom prepped data path: {datasets.PREPPED_DATA_DIR}")
