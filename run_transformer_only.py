@@ -136,34 +136,22 @@ def main():
         "Stage 3/5: Training transformer models"
     )
 
-    # Stage 4: Backup trained models to Google Drive
+    # Stage 4: Models are already in Google Drive (no backup needed)
     drive_models_dir = "/content/drive/MyDrive/SportsTrackingTransformer/models_gamestate"
     from pathlib import Path
     if Path("/content/drive/MyDrive").exists():
         print("\n" + "="*60)
-        print("Stage 4/5: Backing up models to Google Drive")
+        print("Stage 4/5: Models saved to Google Drive")
         print("="*60 + "\n")
-
-        Path(drive_models_dir).mkdir(exist_ok=True, parents=True)
-
-        local_transformer_dir = Path(local_output_models) / "transformer"
-        if local_transformer_dir.exists():
-            import subprocess
-            print(f"Copying models to {drive_models_dir}/transformer/")
-            subprocess.run(
-                ["rsync", "-av", "--progress", f"{local_transformer_dir}/", f"{drive_models_dir}/transformer/"],
-                check=True
-            )
-            print("✓ Models backed up to Google Drive\n")
-        else:
-            print(f"⚠️  No transformer models found at {local_transformer_dir}\n")
+        print(f"✓ Models are already in Google Drive: {drive_models_dir}/transformer/\n")
     else:
-        print("\nGoogle Drive not mounted, skipping model backup\n")
+        print("\nGoogle Drive not mounted\n")
 
-    # Stage 5: Generate results summary
+    # Stage 5: Generate results summary (use Drive path since models are there)
+    models_path = drive_models_dir if Path(drive_models_dir).exists() else local_output_models
     run_command(
         f"uv run python src/generate_results_summary.py "
-        f"--models-dir {local_output_models} "
+        f"--models-dir {models_path} "
         f"--prepped-data-dir {local_output_prep} "
         f"--num-features 11",
         "Stage 5/5: Generating results summary"
