@@ -353,8 +353,8 @@ def main(args):
     # Total: 12 configurations per architecture × 2 architectures = 24 models
 
     lrs = [1e-4]
-    model_dims = [32, 128]  # Removed 512 - too large, overfits on 60% sample
-    num_layers = [1, 2, 4]  # Removed L=8 to speed up gridsearch
+    model_dims = [32, 64, 128]  # Added M64 as middle option between M32 and M128
+    num_layers = [1, 2, 4, 8]  # Added L=8 back for deeper models
 
     # Create gridsearch iterable
     gridsearch = list(product(model_dims, num_layers, lrs))
@@ -369,13 +369,23 @@ def main(args):
 
     # Train models for each hyperparameter combination
     for M, L, LR in tqdm(gridsearch, desc="Hyperparam Gridsearch"):
-        # Use higher regularization for M128 to prevent overfitting
-        # M32 uses default settings (dropout=0.3, weight_decay=0.0, patience=4)
-        # M128 uses stronger regularization (dropout=0.4, weight_decay=0.01, patience=10)
-        # Higher patience for M128 because regularization slows down convergence
-        dropout = 0.4 if M == 128 else 0.3
-        weight_decay = 0.01 if M == 128 else 0.0
-        patience = 10 if M == 128 else args.patience
+        # Use model-size-dependent regularization to prevent overfitting
+        # M32: minimal regularization (dropout=0.3, weight_decay=0.0, patience=4)
+        # M64: light regularization (dropout=0.35, weight_decay=0.005, patience=6)
+        # M128: stronger regularization (dropout=0.4, weight_decay=0.01, patience=10)
+        # Higher patience for larger models because regularization slows down convergence
+        if M == 32:
+            dropout = 0.3
+            weight_decay = 0.0
+            patience = args.patience
+        elif M == 64:
+            dropout = 0.35
+            weight_decay = 0.005
+            patience = max(6, args.patience)
+        else:  # M == 128
+            dropout = 0.4
+            weight_decay = 0.01
+            patience = max(10, args.patience)
 
         train_model(
             model_type=args.model_type,
