@@ -354,7 +354,7 @@ def main(args):
 
     lrs = [1e-4]
     model_dims = [32, 64, 128]  # Added M64 as middle option between M32 and M128
-    num_layers = [1, 2, 4, 8]  # Added L=8 back for deeper models
+    num_layers = [1, 2, 4]  # Added L=4 to test deeper models
 
     # Create gridsearch iterable
     gridsearch = list(product(model_dims, num_layers, lrs))
