@@ -404,8 +404,17 @@ if __name__ == "__main__":
         datasets.DATASET_DIR = Path(args.dataset_dir)
         print(f"Using custom dataset path: {datasets.DATASET_DIR}")
     if args.models_dir:
-        globals()['MODELS_PATH'] = Path(args.models_dir)
+        # Check if Google Drive path exists for custom models dir
+        local_models_path = Path(args.models_dir)
+        gdrive_models_path = Path("/content/drive/MyDrive/SportsTrackingTransformer") / args.models_dir
+
+        if gdrive_models_path.parent.exists():
+            globals()['MODELS_PATH'] = gdrive_models_path
+            print(f"Using custom models path (Google Drive): {globals()['MODELS_PATH']}")
+        else:
+            globals()['MODELS_PATH'] = local_models_path
+            print(f"Using custom models path (local): {globals()['MODELS_PATH']}")
+
         globals()['MODELS_PATH'].mkdir(exist_ok=True, parents=True)
-        print(f"Using custom models path: {globals()['MODELS_PATH']}")
 
     main(args)
