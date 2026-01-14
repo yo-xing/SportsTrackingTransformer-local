@@ -347,14 +347,16 @@ def main(args):
     """
     # Hyperparameter search space:
     # - lrs: Learning rate (1e-4 based on prior experimentation)
-    # - model_dims: Model width (32, 128, 512) - # size of internal vector representation for each player in each layer
+    # - model_dims: Model width (32, 64) - # size of internal vector representation for each player in each layer
     # - num_layers: Model depth (1, 2, 4, 8) - number of stacked layers
     #
-    # Total: 12 configurations per architecture × 2 architectures = 24 models
+    # Removed M128 due to memory constraints during evaluation
+    # Added L8 to test deeper architectures
+    # Total: 8 configurations (2 dims × 4 layers × 1 lr)
 
     lrs = [1e-4]
-    model_dims = [32, 64, 128]  # Added M64 as middle option between M32 and M128
-    num_layers = [1, 2, 4]  # Added L=4 to test deeper models
+    model_dims = [32, 64]  # Removed M128 due to OOM during evaluation
+    num_layers = [1, 2, 4, 8]  # Added L=8 to test deeper models
 
     # Create gridsearch iterable
     gridsearch = list(product(model_dims, num_layers, lrs))
