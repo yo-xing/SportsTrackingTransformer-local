@@ -349,7 +349,7 @@ def main(args):
     # Total: 12 configurations per architecture × 2 architectures = 24 models
 
     lrs = [1e-4]
-    model_dims = [32, 128, 512]
+    model_dims = [32, 128]  # Removed 512 - too large, overfits on 60% sample
     num_layers = [1, 2, 4]  # Removed L=8 to speed up gridsearch
 
     # Create gridsearch iterable
@@ -365,13 +365,20 @@ def main(args):
 
     # Train models for each hyperparameter combination
     for M, L, LR in tqdm(gridsearch, desc="Hyperparam Gridsearch"):
+        # Use higher regularization for M128 to prevent overfitting
+        # M32 uses default settings (dropout=0.3, weight_decay=0.0)
+        # M128 uses stronger regularization (dropout=0.5, weight_decay=0.01)
+        dropout = 0.5 if M == 128 else 0.3
+        weight_decay = 0.01 if M == 128 else 0.0
+
         train_model(
             model_type=args.model_type,
             batch_size=args.batch_size,
             model_dim=M,
             num_layers=L,
             learning_rate=LR,
-            dropout=0.3,
+            dropout=dropout,
+            weight_decay=weight_decay,
             device=args.device,
             skip_existing=args.skip_existing,
             patience=args.patience,
