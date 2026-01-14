@@ -276,9 +276,9 @@ def train_model(
 
     # Create dataloaders with optimized settings
     # Training: smaller batch size, shuffled for better generalization
-    # Validation: larger batch size (1024), no shuffle for consistent evaluation
+    # Validation: use same batch size as training to avoid OOM on limited RAM systems
     train_dataloader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_workers)
-    val_dataloader = DataLoader(val_ds, batch_size=1024, shuffle=False, pin_memory=True, num_workers=num_workers)
+    val_dataloader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=max(2, num_workers // 2))
 
     # Set up devices
     devices = [device] if device >= 0 else [0, 1]  # if device is specified, use it, otherwise pick 1 gpu to use
