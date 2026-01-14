@@ -307,7 +307,12 @@ def train_model(
         gradient_clip_val=1.0,  # Clip gradients to prevent explosion
         callbacks=[
             callbacks.EarlyStopping(monitor="val_loss", patience=patience),
-            callbacks.ModelCheckpoint(monitor="val_loss", save_top_k=1, filename="{epoch}-{val_loss:.3f}"),
+            callbacks.ModelCheckpoint(
+                monitor="val_loss",
+                save_top_k=3,  # Keep top 3 checkpoints instead of just 1
+                save_last=True,  # Also save the last checkpoint
+                filename="{epoch}-{val_loss:.3f}"
+            ),
             callbacks.ModelSummary(max_depth=2),
         ],
     )
