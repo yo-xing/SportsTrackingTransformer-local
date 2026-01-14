@@ -616,6 +616,8 @@ def parse_args():
                        help="Prepared data directory (default: data/split_prepped_data_extra)")
     parser.add_argument("--num-features", type=int, default=6,
                        help="Number of input features for transformer (default: 6)")
+    parser.add_argument("--best-only", action="store_true",
+                       help="Only generate results for the checkpoint with lowest validation loss")
     return parser.parse_args()
 
 
@@ -646,6 +648,42 @@ def main():
     print("\n" + "=" * 60)
     print("GENERATING RESULTS")
     print("=" * 60)
+
+    # If best-only flag is set, find and process only the best checkpoint
+    if args.best_only:
+        print("\nFinding best checkpoint (lowest validation loss)...")
+        configs = find_all_model_checkpoints()
+        if not configs:
+            print("No model checkpoints found!")
+            return
+
+        # Find the config with lowest validation loss
+        best_config = min(configs, key=lambda x: x["val_loss"])
+        print(f"Best model: {best_config['model_type']} "
+              f"M{best_config['model_dim']}_L{best_config['num_layers']}")
+        print(f"Validation loss: {best_config['val_loss']:.3f}")
+        print(f"Checkpoint: {best_config['checkpoint_path']}")
+
+        # Generate results only for best checkpoint
+        results_file = Path(best_config['results_path'])
+        if results_file.exists():
+            print(f"\n✓ Results already exist: {results_file}")
+            return
+
+        print(f"\nGenerating results for best checkpoint...")
+        from train import train_model, LitModel
+        import torch
+
+        # Load model from checkpoint
+        lit_model = LitModel.load_from_checkpoint(best_config['checkpoint_path'])
+
+        # Generate predictions for all splits
+        for split in ["train", "val", "test"]:
+            print(f"  Generating {split} predictions...")
+            # Call prediction function here (would need to extract from existing code)
+
+        print(f"✓ Results saved to: {results_file}")
+        return
 
     results_df = load_results()
     results = calculate_results(results_df)

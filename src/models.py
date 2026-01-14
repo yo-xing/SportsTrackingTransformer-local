@@ -288,6 +288,7 @@ class LitModel(LightningModule):
         num_layers: int,
         dropout: float = 0.1,
         learning_rate: float = 1e-3,
+        weight_decay: float = 0.0,
     ):
         """
         Initialize the LitModel.
@@ -299,6 +300,7 @@ class LitModel(LightningModule):
             num_layers (int): Number of layers in the model.
             dropout (float): Dropout rate for regularization.
             learning_rate (float): Learning rate for the optimizer.
+            weight_decay (float): Weight decay (L2 penalty) for the optimizer.
         """
         super().__init__()
         self.model_type = model_type.lower()
@@ -321,6 +323,7 @@ class LitModel(LightningModule):
         )
 
         self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
         self.num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         self.hparams["params"] = self.num_params
         for k, v in self.model.hyperparams.items():
@@ -415,7 +418,7 @@ class LitModel(LightningModule):
         Returns:
             AdamW: Configured optimizer.
         """
-        return AdamW(self.parameters(), lr=self.learning_rate)
+        return AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
     def get_hyperparams(self) -> dict[str, Any]:
         """
