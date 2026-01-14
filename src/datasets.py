@@ -88,8 +88,8 @@ class BDB2024_Dataset(Dataset):
         n_workers = min(cpu_count - 2, 32)  # Use most CPUs, leave 2 for system, cap at 32
 
         # With 167GB RAM, can process much larger chunks without OOM
-        # Original: 35k (for limited RAM). With A100: can do 150k+
-        MAX_KEYS_PER_CHUNK = 150_000
+        # Original: 35k used ~45GB. With A100 (167GB): 100k should use ~130GB (safe margin)
+        MAX_KEYS_PER_CHUNK = 100_000
 
         n = len(self.keys)
         n_chunks = (n + MAX_KEYS_PER_CHUNK - 1) // MAX_KEYS_PER_CHUNK
