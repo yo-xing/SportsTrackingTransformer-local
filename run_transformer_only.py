@@ -4,12 +4,13 @@ Run the full pipeline for transformer model only (skips zoo model training).
 This is memory-efficient and suitable for running on full 18-week dataset.
 
 Usage:
-    python run_transformer_only.py [--force] [--skip-prep] [--skip-precompute]
+    python run_transformer_only.py [--force] [--skip-prep] [--skip-precompute] [--skip-existing]
 
 Options:
     --force            Force recompute all stages (ignore cache)
     --skip-prep        Skip data preparation stage (use existing data)
     --skip-precompute  Skip feature precomputation stage (use existing features)
+    --skip-existing    Skip training models that already have checkpoints
 """
 
 import subprocess
@@ -39,10 +40,12 @@ def main():
     parser.add_argument("--skip-precompute", action="store_true", help="Skip feature precomputation")
     parser.add_argument("--sample", type=float, default=None, help="Sample fraction of data (e.g., 0.1 for 10%%)")
     parser.add_argument("--retrain", action="store_true", help="Delete existing model checkpoints before training")
+    parser.add_argument("--skip-existing", action="store_true", help="Skip training models that already have checkpoints")
     args = parser.parse_args()
 
     force_flag = "--force" if args.force else ""
     sample_flag = f"--sample {args.sample}" if args.sample else ""
+    skip_existing_flag = "--skip-existing" if args.skip_existing else ""
 
     print("\n" + "="*60)
     print("Transformer-Only Training Pipeline")
@@ -132,7 +135,7 @@ def main():
         f"uv run python src/train.py --model_type transformer --device 0 "
         f"--prepped-data-dir {local_output_prep} "
         f"--dataset-dir {local_output_datasets} --models-dir {local_output_models} "
-        f"--batch-size 512 --num-workers {num_workers} --skip-existing",  # Increased batch size for A100, skip completed models
+        f"--batch-size 512 --num-workers {num_workers} {skip_existing_flag}",  # Increased batch size for A100
         "Stage 3/5: Training transformer models"
     )
 
