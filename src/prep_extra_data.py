@@ -527,6 +527,8 @@ def filter_null_features(df: pl.DataFrame) -> pl.DataFrame:
     Note: This checks base tracking features (x, y, s, o, dir) that exist in the raw data.
     The model input features (x_rel, y_rel, vx, vy, side, is_ball_carrier) are already
     filtered in add_relative_positions().
+
+    Football rows are kept even if they have null values in some columns (e.g., orientation).
     """
     # Only check columns that exist in the Axially format
     # Note: Axially data has 'accel' (acceleration magnitude) instead of 'a'
@@ -537,13 +539,20 @@ def filter_null_features(df: pl.DataFrame) -> pl.DataFrame:
     rows_before = len(df)
     plays_before = df.select(["gameId", "playId", "mirrored"]).n_unique()
 
-    # Filter out rows with any null in feature columns
-    for col in feature_cols:
-        df = df.filter(pl.col(col).is_not_null())
+    # Separate football rows (keep them regardless of null values)
+    football_df = df.filter(pl.col("possession_status") == "ball")
+    player_df = df.filter(pl.col("possession_status") != "ball")
 
-    # Filter out rows with inf values
+    # Filter out player rows with any null in feature columns
     for col in feature_cols:
-        df = df.filter(pl.col(col).is_finite())
+        player_df = player_df.filter(pl.col(col).is_not_null())
+
+    # Filter out player rows with inf values
+    for col in feature_cols:
+        player_df = player_df.filter(pl.col(col).is_finite())
+
+    # Recombine football and filtered player data
+    df = pl.concat([player_df, football_df], how="vertical")
 
     rows_after = len(df)
     plays_after = df.select(["gameId", "playId", "mirrored"]).n_unique()
