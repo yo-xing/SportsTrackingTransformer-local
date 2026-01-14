@@ -184,6 +184,7 @@ def train_model(
     num_layers,
     learning_rate,
     dropout,
+    weight_decay=0.0,
     device=0,
     dbg_run=False,
     skip_existing=False,
@@ -207,10 +208,12 @@ def train_model(
         num_layers (int): Number of layers in the model (1, 2, 4, or 8).
         learning_rate (float): Learning rate for AdamW optimizer (typically 1e-4).
         dropout (float): Dropout rate for regularization (typically 0.3).
+        weight_decay (float, optional): L2 regularization weight decay (typically 0.0 or 0.01). Defaults to 0.0.
         device (int, optional): GPU device index to use (-1 for CPU). Defaults to 0.
         dbg_run (bool, optional): Whether to run in debug mode with profiling. Defaults to False.
         skip_existing (bool, optional): Skip training if checkpoint exists. Defaults to False.
         patience (int, optional): Early stopping patience in epochs. Defaults to 5.
+        num_workers (int, optional): Number of dataloader workers. Defaults to 8.
 
     Returns:
         LitModel: Trained model instance with best validation performance.
@@ -261,6 +264,7 @@ def train_model(
             num_layers=num_layers,
             learning_rate=learning_rate,
             dropout=dropout,
+            weight_decay=weight_decay,
         )
         curr_epoch = 0
 
