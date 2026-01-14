@@ -345,7 +345,7 @@ def main(args):
 
     lrs = [1e-4]
     model_dims = [32, 128, 512]
-    num_layers = [1, 2, 4, 8]
+    num_layers = [1, 2, 4]  # Removed L=8 to speed up gridsearch
 
     # Create gridsearch iterable
     gridsearch = list(product(model_dims, num_layers, lrs))
