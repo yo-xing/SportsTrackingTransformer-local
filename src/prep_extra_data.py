@@ -398,17 +398,17 @@ def augment_mirror_tracking(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
-def add_relative_positions(df: pl.DataFrame) -> pl.DataFrame:
+def add_relative_positions(df: pl.DataFrame, raw_df: pl.DataFrame) -> pl.DataFrame:
     """
     Add relative position features anchored to the ball position at first frame.
     This works for all plays including those without a ball carrier (e.g., incomplete passes).
-    """
-    # Load raw data to get football positions
-    raw_df = load_extra_data()
-    raw_df = map_column_names(raw_df)
 
-    # Keep only accepted play types (same as filter_tracking_data)
-    raw_df = raw_df.filter(pl.col("play_type").is_in(ACCEPTED_PLAY_TYPES))
+    Args:
+        df: Filtered tracking data (without football rows)
+        raw_df: Unfiltered tracking data that includes football positions
+    """
+    # Use provided raw_df instead of reloading from disk
+    # This respects sampling when enabled
 
     # Get football positions
     football_df = raw_df.filter(pl.col("possession_status") == "ball")
@@ -766,7 +766,7 @@ def main(output_dir: Path = OUTPUT_DATA_DIR, drive_dir: Path | None = None, week
     df = augment_mirror_tracking(df)
 
     print("\nAdding relative positions...")
-    df = add_relative_positions(df)
+    df = add_relative_positions(df, raw_df)
 
     print("\nFiltering plays with incomplete rosters...")
     df = filter_complete_plays(df)
