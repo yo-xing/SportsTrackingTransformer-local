@@ -123,13 +123,16 @@ def main():
         print("\n⏭️  Skipping feature precomputation stage\n")
 
     # Stage 3: Train transformer models only
-    # Optimized for A100 with 167GB RAM: batch_size=256, num_workers=16
-    # Note: --skip-existing removed to allow retraining models with NaN loss
+    # Dynamically set num_workers based on CPU count (leave some headroom)
+    import os
+    cpu_count = os.cpu_count() or 8
+    num_workers = max(4, min(cpu_count - 4, 16))  # Use CPU count - 4, max 16, min 4
+
     run_command(
         f"uv run python src/train.py --model_type transformer --device 0 "
         f"--prepped-data-dir {local_output_prep} "
         f"--dataset-dir {local_output_datasets} --models-dir {local_output_models} "
-        f"--batch-size 256 --num-workers 16",
+        f"--batch-size 256 --num-workers {num_workers}",
         "Stage 3/5: Training transformer models"
     )
 
