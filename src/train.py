@@ -371,9 +371,9 @@ def main(args):
     for M, L, LR in tqdm(gridsearch, desc="Hyperparam Gridsearch"):
         # Use higher regularization for M128 to prevent overfitting
         # M32 uses default settings (dropout=0.3, weight_decay=0.0, patience=4)
-        # M128 uses stronger regularization (dropout=0.5, weight_decay=0.01, patience=10)
+        # M128 uses stronger regularization (dropout=0.4, weight_decay=0.01, patience=10)
         # Higher patience for M128 because regularization slows down convergence
-        dropout = 0.5 if M == 128 else 0.3
+        dropout = 0.4 if M == 128 else 0.3
         weight_decay = 0.01 if M == 128 else 0.0
         patience = 10 if M == 128 else args.patience
 
