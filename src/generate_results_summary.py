@@ -384,9 +384,13 @@ def generate_frame_difference_plot(frame_diff_df: pl.DataFrame) -> None:
     print(f"  Saved: {plot_path}")
 
 
-def find_all_model_checkpoints() -> list[dict]:
+def find_all_model_checkpoints(require_results: bool = True) -> list[dict]:
     """
     Find all model checkpoints and group by configuration.
+
+    Args:
+        require_results: If True, only return checkpoints that have results files.
+                        If False, return all checkpoints.
 
     Returns:
         list[dict]: List of config dicts with model_type, model_dim, num_layers, and best checkpoint path.
@@ -437,7 +441,9 @@ def find_all_model_checkpoints() -> list[dict]:
             if best_checkpoint:
                 # Find corresponding results file
                 results_file = best_checkpoint.with_suffix(".results.parquet")
-                if results_file.exists():
+
+                # Add config if results exist or if we don't require them
+                if not require_results or results_file.exists():
                     configs.append(
                         {
                             "model_type": model_type,
@@ -652,7 +658,7 @@ def main():
     # If best-only flag is set, find and process only the best checkpoint
     if args.best_only:
         print("\nFinding best checkpoint (lowest validation loss)...")
-        configs = find_all_model_checkpoints()
+        configs = find_all_model_checkpoints(require_results=False)
         if not configs:
             print("No model checkpoints found!")
             return
@@ -671,17 +677,14 @@ def main():
             return
 
         print(f"\nGenerating results for best checkpoint...")
-        from train import train_model, LitModel
-        import torch
+        from train import predict_model_as_df
 
-        # Load model from checkpoint
-        lit_model = LitModel.load_from_checkpoint(best_config['checkpoint_path'])
+        # Generate predictions
+        preds_df = predict_model_as_df(ckpt_path=Path(best_config['checkpoint_path']), devices=[0])
 
-        # Generate predictions for all splits
-        for split in ["train", "val", "test"]:
-            print(f"  Generating {split} predictions...")
-            # Call prediction function here (would need to extract from existing code)
-
+        # Save results
+        results_file.parent.mkdir(parents=True, exist_ok=True)
+        preds_df.write_parquet(results_file, compression="zstd", compression_level=22)
         print(f"✓ Results saved to: {results_file}")
         return
 
