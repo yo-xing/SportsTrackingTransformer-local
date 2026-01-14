@@ -370,10 +370,12 @@ def main(args):
     # Train models for each hyperparameter combination
     for M, L, LR in tqdm(gridsearch, desc="Hyperparam Gridsearch"):
         # Use higher regularization for M128 to prevent overfitting
-        # M32 uses default settings (dropout=0.3, weight_decay=0.0)
-        # M128 uses stronger regularization (dropout=0.5, weight_decay=0.01)
+        # M32 uses default settings (dropout=0.3, weight_decay=0.0, patience=4)
+        # M128 uses stronger regularization (dropout=0.5, weight_decay=0.01, patience=10)
+        # Higher patience for M128 because regularization slows down convergence
         dropout = 0.5 if M == 128 else 0.3
         weight_decay = 0.01 if M == 128 else 0.0
+        patience = 10 if M == 128 else args.patience
 
         train_model(
             model_type=args.model_type,
@@ -385,7 +387,7 @@ def main(args):
             weight_decay=weight_decay,
             device=args.device,
             skip_existing=args.skip_existing,
-            patience=args.patience,
+            patience=patience,
             num_workers=args.num_workers,
         )
 
