@@ -493,19 +493,18 @@ def add_relative_positions(df: pl.DataFrame, raw_df: pl.DataFrame) -> pl.DataFra
 
 def filter_complete_plays(df: pl.DataFrame) -> pl.DataFrame:
     """
-    Filter out plays that don't have exactly 22 players per frame.
-    This ensures all plays work with both transformer and zoo models.
-    Still keeps plays without ball carriers as long as they have 22 players.
+    Filter out plays that don't have exactly 23 entities per frame (22 players + 1 football).
+    This ensures all plays work with the transformer model.
     """
-    # Count players per frame
-    player_counts = df.group_by(["gameId", "playId", "mirrored", "frameId"]).agg(
-        pl.count().alias("player_count")
+    # Count entities per frame (22 players + 1 football = 23)
+    entity_counts = df.group_by(["gameId", "playId", "mirrored", "frameId"]).agg(
+        pl.len().alias("entity_count")
     )
 
-    # Find plays with any frame that doesn't have 22 players
+    # Find plays with any frame that doesn't have 23 entities
     incomplete_plays = (
-        player_counts
-        .filter(pl.col("player_count") != 22)
+        entity_counts
+        .filter(pl.col("entity_count") != 23)
         .select(["gameId", "playId", "mirrored"])
         .unique()
     )
@@ -514,7 +513,7 @@ def filter_complete_plays(df: pl.DataFrame) -> pl.DataFrame:
     total_plays = df.select(["gameId", "playId", "mirrored"]).n_unique()
 
     if num_incomplete > 0:
-        print(f"Filtering out {num_incomplete}/{total_plays} plays with != 22 players per frame")
+        print(f"Filtering out {num_incomplete}/{total_plays} plays with != 23 entities per frame")
         df = df.join(incomplete_plays, on=["gameId", "playId", "mirrored"], how="anti")
 
     return df
@@ -604,10 +603,18 @@ def get_yards_gained_target_df(df: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataF
     print(f"Lost {(og_play_count - new_play_count) / max(og_play_count, 1):.3%} plays when filtering for valid targets")
 
     unique_targets = target_df.select(["gameId", "playId", "mirrored", "yards_gained"]).unique()
-    print(f"Yards gained stats: min={unique_targets['yards_gained'].min():.0f}, "
-          f"max={unique_targets['yards_gained'].max():.0f}, "
-          f"mean={unique_targets['yards_gained'].mean():.1f}, "
-          f"median={unique_targets['yards_gained'].median():.1f}")
+
+    if len(unique_targets) > 0:
+        min_val = unique_targets['yards_gained'].min()
+        max_val = unique_targets['yards_gained'].max()
+        mean_val = unique_targets['yards_gained'].mean()
+        median_val = unique_targets['yards_gained'].median()
+        print(f"Yards gained stats: min={min_val:.0f}, "
+              f"max={max_val:.0f}, "
+              f"mean={mean_val:.1f}, "
+              f"median={median_val:.1f}")
+    else:
+        raise ValueError("No valid plays with targets found after filtering. Try using a larger sample.")
 
     return target_df, df
 
