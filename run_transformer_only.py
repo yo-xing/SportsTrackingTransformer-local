@@ -95,29 +95,24 @@ def main():
         "Stage 3/3: Training transformer models"
     )
 
-    # Stage 4: Backup trained models to Google Drive
+    # Stage 4: Models are already in Google Drive (no backup needed)
     drive_models_dir = "/content/drive/MyDrive/SportsTrackingTransformer/models_full18weeks"
     from pathlib import Path
     if Path("/content/drive/MyDrive").exists():
         print("\n" + "="*60)
-        print("Stage 4/4: Backing up models to Google Drive")
+        print("Stage 4/4: Models saved to Google Drive")
         print("="*60 + "\n")
 
-        Path(drive_models_dir).mkdir(exist_ok=True, parents=True)
-
-        local_transformer_dir = Path(local_output_models) / "transformer"
-        if local_transformer_dir.exists():
-            import subprocess
-            print(f"Copying models to {drive_models_dir}/transformer/")
-            subprocess.run(
-                ["rsync", "-av", "--progress", f"{local_transformer_dir}/", f"{drive_models_dir}/transformer/"],
-                check=True
-            )
-            print("✓ Models backed up to Google Drive\n")
+        # Check if models exist in Google Drive (they're saved directly there during training)
+        drive_transformer_dir = Path(drive_models_dir) / "transformer"
+        if drive_transformer_dir.exists() and list(drive_transformer_dir.glob("M*/checkpoints/*.ckpt")):
+            checkpoint_count = len(list(drive_transformer_dir.glob("M*/checkpoints/*.ckpt")))
+            print(f"✓ Models are already in Google Drive: {drive_models_dir}/transformer/")
+            print(f"  Found {checkpoint_count} checkpoint(s)\n")
         else:
-            print(f"⚠️  No transformer models found at {local_transformer_dir}\n")
+            print(f"⚠️  No transformer models found at {drive_models_dir}/transformer/\n")
     else:
-        print("\nGoogle Drive not mounted, skipping model backup\n")
+        print("\nGoogle Drive not mounted, models saved locally\n")
 
     print("\n" + "="*60)
     print("Pipeline Complete! 🎉")
