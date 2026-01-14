@@ -81,12 +81,15 @@ class BDB2024_Dataset(Dataset):
         self.tgt_arrays: dict[tuple, np.ndarray] = {}
         self.feature_arrays: dict[tuple, np.ndarray] = {}
 
-        # ---- Minimal performance/memory tweaks ----
-        n_workers = 6
+        # ---- Performance/memory tweaks ----
+        # With A100 (167GB RAM), can use more workers and larger chunks
+        import os
+        cpu_count = os.cpu_count() or 8
+        n_workers = min(cpu_count - 2, 32)  # Use most CPUs, leave 2 for system, cap at 32
 
-        # Keep chunking to bound peak RAM. 50k worked, but you still OOM on train by chunk ~4.
-        # This reduces peak further without meaningfully changing compute time.
-        MAX_KEYS_PER_CHUNK = 35_000
+        # With 167GB RAM, can process much larger chunks without OOM
+        # Original: 35k (for limited RAM). With A100: can do 150k+
+        MAX_KEYS_PER_CHUNK = 150_000
 
         n = len(self.keys)
         n_chunks = (n + MAX_KEYS_PER_CHUNK - 1) // MAX_KEYS_PER_CHUNK
