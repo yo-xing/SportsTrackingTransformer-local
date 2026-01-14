@@ -159,7 +159,8 @@ class BDB2024_Dataset(Dataset):
         return y
 
     def transformer_transform_input_frame_df(self, frame_df: pd.DataFrame) -> np.ndarray:
-        features = ["x_rel", "y_rel", "vx", "vy", "side", "is_ball_carrier"]
+        # Player-specific features (6) + Game state feature (1: distanceToGoal) = 7 total
+        features = ["x_rel", "y_rel", "vx", "vy", "side", "is_ball_carrier", "distanceToGoal"]
         x = frame_df[features].to_numpy(dtype=np.float32)
         assert x.shape == (22, len(features)), f"Expected shape (22, {len(features)}), got {x.shape}"
         return x
@@ -223,6 +224,7 @@ def _read_features(split: str) -> pl.DataFrame:
         "vy",
         "side",
         "is_ball_carrier",
+        "distanceToGoal",
     ]
     df = pl.read_parquet(path, columns=cols)
 
@@ -233,6 +235,7 @@ def _read_features(split: str) -> pl.DataFrame:
             pl.col("y_rel").cast(pl.Float32),
             pl.col("vx").cast(pl.Float32),
             pl.col("vy").cast(pl.Float32),
+            pl.col("distanceToGoal").cast(pl.Float32),
             pl.col("side").cast(pl.Int8),
             pl.col("is_ball_carrier").cast(pl.Int8),
             pl.col("mirrored").cast(pl.Boolean),
