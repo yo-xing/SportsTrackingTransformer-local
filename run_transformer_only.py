@@ -132,7 +132,7 @@ def main():
         f"uv run python src/train.py --model_type transformer --device 0 "
         f"--prepped-data-dir {local_output_prep} "
         f"--dataset-dir {local_output_datasets} --models-dir {local_output_models} "
-        f"--batch-size 256 --num-workers {num_workers}",
+        f"--batch-size 512 --num-workers {num_workers} --skip-existing",  # Increased batch size for A100, skip completed models
         "Stage 3/5: Training transformer models"
     )
 
