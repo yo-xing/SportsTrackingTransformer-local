@@ -25,8 +25,8 @@ from pathlib import Path
 import polars as pl
 
 INPUT_DATA_DIR = Path("/content/drive/MyDrive/NGS/NFL/REG/")
-OUTPUT_DATA_DIR = Path("data/split_prepped_data_extra_gamestate/")
-DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate") # Google Drive directory for caching (optional)
+OUTPUT_DATA_DIR = Path("data/split_prepped_data_extra_gamestate_23/")
+DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_23") # Google Drive directory for caching (optional)
 
 # Weeks to read
 WEEKS_TO_READ = ["06", "07"]
@@ -139,20 +139,20 @@ def map_column_names(df: pl.DataFrame) -> pl.DataFrame:
 def filter_tracking_data(df: pl.DataFrame) -> pl.DataFrame:
     """
     Filter tracking data:
-    - Remove football rows (possession_status == 'ball')
+    - Keep football rows (possession_status == 'ball') as 23rd entity
     - Keep only accepted play types (pass, rush, sack)
 
     Args:
         df: Raw tracking data
 
     Returns:
-        Filtered tracking data with only accepted play types
+        Filtered tracking data with only accepted play types (including football)
     """
     og_len = len(df)
 
-    # Filter out football rows
-    df = df.filter(pl.col("possession_status") != "ball")
-    print(f"Removed football rows: {og_len - len(df)} rows")
+    # Keep football rows - treat football as 23rd entity
+    # No filtering needed - football is now part of the input
+    print(f"Keeping football as 23rd entity")
 
     # Keep only accepted play types
     og_len = len(df)
@@ -273,6 +273,8 @@ def add_derived_features(df: pl.DataFrame) -> pl.DataFrame:
         is_ball_carrier=(pl.col("nflId") == pl.col("ballCarrierId")).cast(int).fill_null(0),
         side=pl.when(pl.col("possession_status") == "off")
         .then(pl.lit(1))
+        .when(pl.col("possession_status") == "ball")
+        .then(pl.lit(0))  # Football gets side=0 (neutral)
         .otherwise(pl.lit(-1)),
         # Placeholder for missing player data
         weight_Z=pl.lit(0.0),

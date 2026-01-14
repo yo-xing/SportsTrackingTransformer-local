@@ -315,7 +315,7 @@ class LitModel(LightningModule):
             dropout=dropout,
         )
         self.example_input_array = (
-            torch.randn((batch_size, 22, self.feature_len))
+            torch.randn((batch_size, 23, self.feature_len))  # 22 players + 1 football
             if self.model_type == "transformer"
             else torch.randn((batch_size, 10, 11, self.feature_len))
         )
