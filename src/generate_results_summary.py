@@ -157,7 +157,7 @@ def load_results() -> pl.DataFrame:
     return results_df
 
 
-def _calculate_mae_for_df(df: pl.DataFrame) -> float:
+def _calculate_mae_for_df(df: pl.DataFrame) -> float | None:
     """
     Helper to calculate MAE (Mean Absolute Error) for yards gained prediction.
 
@@ -165,12 +165,15 @@ def _calculate_mae_for_df(df: pl.DataFrame) -> float:
         df: DataFrame with columns: yards_gained, expected_yards
 
     Returns:
-        MAE in yards, rounded to 2 decimal places
+        MAE in yards, rounded to 2 decimal places, or None if df is empty
     """
+    if len(df) == 0:
+        return None
+
     mae = df.select(
         (pl.col("yards_gained") - pl.col("expected_yards")).abs().mean()
     ).item()
-    return round(mae, 2)
+    return round(mae, 2) if mae is not None else None
 
 
 def _calculate_improvement_metrics(zoo_ade: float, transformer_ade: float) -> tuple[float, float]:
@@ -205,11 +208,16 @@ def calculate_results(results_df: pl.DataFrame) -> list[dict]:
 
         for model_type in ["zoo", "transformer"]:
             model_df = split_df.filter(pl.col("model_type") == model_type)
-            row[model_type] = _calculate_mae_for_df(model_df)
+            mae = _calculate_mae_for_df(model_df)
+            if mae is not None:
+                row[model_type] = mae
 
-        row["improvement_pct"], row["improvement_yards"] = _calculate_improvement_metrics(
-            row["zoo"], row["transformer"]
-        )
+        # Only calculate improvement if both models exist
+        if "zoo" in row and "transformer" in row:
+            row["improvement_pct"], row["improvement_yards"] = _calculate_improvement_metrics(
+                row["zoo"], row["transformer"]
+            )
+
         row["n_plays"] = split_df.select(pl.struct(["gameId", "playId"]).n_unique()).item()
         row["n_frames"] = split_df.select(pl.len()).item()
 
@@ -234,11 +242,16 @@ def calculate_results(results_df: pl.DataFrame) -> list[dict]:
 
         for model_type in ["zoo", "transformer"]:
             model_df = event_df.filter(pl.col("model_type") == model_type)
-            row[model_type] = _calculate_mae_for_df(model_df)
+            mae = _calculate_mae_for_df(model_df)
+            if mae is not None:
+                row[model_type] = mae
 
-        row["improvement_pct"], row["improvement_yards"] = _calculate_improvement_metrics(
-            row["zoo"], row["transformer"]
-        )
+        # Only calculate improvement if both models exist
+        if "zoo" in row and "transformer" in row:
+            row["improvement_pct"], row["improvement_yards"] = _calculate_improvement_metrics(
+                row["zoo"], row["transformer"]
+            )
+
         row["n_plays"] = n_plays
         row["n_frames"] = event_df.select(pl.len()).item()
         row["_avg_frameId"] = round(event_df["frameId"].mean(), 1)  # For sorting only
@@ -667,21 +680,30 @@ def main():
     # Print test set summary
     test_row = next(r for r in results if r["split"] == "test")
     print(f"\nTest Set Overall:")
-    print(f"  Zoo:         {test_row['zoo']:.2f} yards")
-    print(f"  Transformer: {test_row['transformer']:.2f} yards")
-    print(f"  Improvement: {test_row['improvement_yards']:.2f} yards ({test_row['improvement_pct']:.1f}%)")
+    if "zoo" in test_row:
+        print(f"  Zoo:         {test_row['zoo']:.2f} yards")
+    if "transformer" in test_row:
+        print(f"  Transformer: {test_row['transformer']:.2f} yards")
+    if "improvement_yards" in test_row and "improvement_pct" in test_row:
+        print(f"  Improvement: {test_row['improvement_yards']:.2f} yards ({test_row['improvement_pct']:.1f}%)")
 
     print(f"\nTest Set Events:")
     for row in results:
         if row["split"].startswith("test-event-"):
             event_name = row["split"].replace("test-event-", "")
-            print(f"  {event_name:20s}: {row['improvement_pct']:5.1f}% improvement")
+            if "improvement_pct" in row:
+                print(f"  {event_name:20s}: {row['improvement_pct']:5.1f}% improvement")
+            elif "transformer" in row:
+                print(f"  {event_name:20s}: {row['transformer']:5.2f} yards (transformer only)")
 
     print(f"\nTest Set Frame Differences:")
     for row in results:
         if row["split"].startswith("test-frames-before-tackle-"):
             frame_cat = row["split"].replace("test-frames-before-tackle-", "")
-            print(f"  {frame_cat:15s}: {row['improvement_pct']:5.1f}% improvement")
+            if "improvement_pct" in row:
+                print(f"  {frame_cat:15s}: {row['improvement_pct']:5.1f}% improvement")
+            elif "transformer" in row:
+                print(f"  {frame_cat:15s}: {row['transformer']:5.2f} yards (transformer only)")
 
 
 if __name__ == "__main__":
