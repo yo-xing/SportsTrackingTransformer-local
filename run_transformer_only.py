@@ -4,12 +4,13 @@ Run the full pipeline for transformer model only (skips zoo model training).
 This is memory-efficient and suitable for running on full 18-week dataset.
 
 Usage:
-    python run_transformer_only.py [--force] [--skip-prep] [--skip-precompute] [--skip-existing]
+    python run_transformer_only.py [--force] [--skip-prep] [--skip-precompute] [--skip-training] [--skip-existing]
 
 Options:
     --force            Force recompute all stages (ignore cache)
     --skip-prep        Skip data preparation stage (use existing data)
     --skip-precompute  Skip feature precomputation stage (use existing features)
+    --skip-training    Skip training (only generate results from existing checkpoints)
     --skip-existing    Skip training models that already have checkpoints
 """
 
@@ -38,6 +39,7 @@ def main():
     parser.add_argument("--force", action="store_true", help="Force recompute all stages (deletes caches)")
     parser.add_argument("--skip-prep", action="store_true", help="Skip data preparation")
     parser.add_argument("--skip-precompute", action="store_true", help="Skip feature precomputation")
+    parser.add_argument("--skip-training", action="store_true", help="Skip training (only generate results from existing checkpoints)")
     parser.add_argument("--sample", type=float, default=None, help="Sample fraction of data (e.g., 0.1 for 10%%)")
     parser.add_argument("--retrain", action="store_true", help="Delete existing model checkpoints before training")
     parser.add_argument("--skip-existing", action="store_true", help="Skip training models that already have checkpoints")
@@ -126,18 +128,21 @@ def main():
         print("\n⏭️  Skipping feature precomputation stage\n")
 
     # Stage 3: Train transformer models only
-    # Dynamically set num_workers based on CPU count (leave some headroom)
-    import os
-    cpu_count = os.cpu_count() or 8
-    num_workers = max(4, min(cpu_count - 4, 16))  # Use CPU count - 4, max 16, min 4
+    if not args.skip_training:
+        # Dynamically set num_workers based on CPU count (leave some headroom)
+        import os
+        cpu_count = os.cpu_count() or 8
+        num_workers = max(4, min(cpu_count - 4, 16))  # Use CPU count - 4, max 16, min 4
 
-    run_command(
-        f"uv run python src/train.py --model_type transformer --device 0 "
-        f"--prepped-data-dir {local_output_prep} "
-        f"--dataset-dir {local_output_datasets} --models-dir {local_output_models} "
-        f"--batch-size 1024 --num-workers {num_workers} {skip_existing_flag}",  # Increased batch size for A100
-        "Stage 3/5: Training transformer models"
-    )
+        run_command(
+            f"uv run python src/train.py --model_type transformer --device 0 "
+            f"--prepped-data-dir {local_output_prep} "
+            f"--dataset-dir {local_output_datasets} --models-dir {local_output_models} "
+            f"--batch-size 1024 --num-workers {num_workers} {skip_existing_flag}",  # Increased batch size for A100
+            "Stage 3/5: Training transformer models"
+        )
+    else:
+        print("\n⏭️  Skipping training stage (using existing checkpoints)\n")
 
     # Stage 4: Models are already in Google Drive (no backup needed)
     drive_models_dir = "/content/drive/MyDrive/SportsTrackingTransformer/models_gamestate"
