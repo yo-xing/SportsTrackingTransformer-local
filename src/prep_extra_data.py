@@ -162,7 +162,7 @@ def filter_tracking_data(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
-def identify_ball_carrier(df: pl.DataFrame) -> pl.DataFrame:
+def identify_ball_carrier(df: pl.DataFrame, raw_df: pl.DataFrame) -> pl.DataFrame:
     """
     Identify the ball carrier for each play.
 
@@ -172,17 +172,14 @@ def identify_ball_carrier(df: pl.DataFrame) -> pl.DataFrame:
     ballCarrierId will be null.
 
     Args:
-        df: Tracking data with football positions
+        df: Filtered tracking data (without football rows)
+        raw_df: Unfiltered tracking data that includes football positions
 
     Returns:
         DataFrame with ballCarrierId column added (nullable)
     """
-    # Load raw data to get football positions
-    raw_df = load_extra_data()
-    raw_df = map_column_names(raw_df)
-
-    # Keep only accepted play types (same as filter_tracking_data)
-    raw_df = raw_df.filter(pl.col("play_type").is_in(ACCEPTED_PLAY_TYPES))
+    # Use provided raw_df instead of reloading from disk
+    # This respects sampling when enabled
 
     # Get football position at key events
     football_df = raw_df.filter(pl.col("possession_status") == "ball")
@@ -747,11 +744,14 @@ def main(output_dir: Path = OUTPUT_DATA_DIR, drive_dir: Path | None = None, week
     print("\nMapping column names...")
     df = map_column_names(df)
 
+    # Save raw data before filtering (needed for ball carrier identification)
+    raw_df = df.clone()
+
     print("\nFiltering tracking data...")
     df = filter_tracking_data(df)
 
     print("\nIdentifying ball carriers...")
-    df = identify_ball_carrier(df)
+    df = identify_ball_carrier(df, raw_df)
 
     print("\nAdding derived features...")
     df = add_derived_features(df)
