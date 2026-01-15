@@ -372,6 +372,15 @@ def main(args):
         else:
             batch_size = 1024
 
+        # Dynamic patience based on model size
+        # Larger models need more patience to converge
+        if M >= 128 and L >= 4:
+            patience = max(args.patience, 10)  # At least 10 for large models
+        elif M >= 128 or L >= 4:
+            patience = max(args.patience, 8)   # At least 8 for medium-large models
+        else:
+            patience = args.patience            # Use default for smaller models
+
         train_model(
             model_type=args.model_type,
             batch_size=batch_size,
@@ -383,7 +392,7 @@ def main(args):
             skip_existing=args.skip_existing,
             skip_if_trained=args.skip_if_trained,
             min_epochs=args.min_epochs,
-            patience=args.patience,
+            patience=patience,
         )
 
 
