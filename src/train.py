@@ -381,13 +381,22 @@ def main(args):
         else:
             patience = args.patience            # Use default for smaller models
 
+        # Dynamic dropout based on model size to prevent overfitting
+        # Larger models (more params) need more regularization
+        if M >= 512:
+            dropout = 0.4  # High dropout for very wide models (M512)
+        elif M >= 128 and L >= 4:
+            dropout = 0.35  # Medium-high dropout for large models (M128_L4, M128_L8)
+        else:
+            dropout = 0.3  # Standard dropout for smaller models
+
         train_model(
             model_type=args.model_type,
             batch_size=batch_size,
             model_dim=M,
             num_layers=L,
             learning_rate=LR,
-            dropout=0.3,
+            dropout=dropout,
             device=args.device,
             skip_existing=args.skip_existing,
             skip_if_trained=args.skip_if_trained,
