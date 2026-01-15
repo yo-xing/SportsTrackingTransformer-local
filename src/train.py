@@ -185,6 +185,8 @@ def train_model(
     device=0,
     dbg_run=False,
     skip_existing=False,
+    skip_if_trained=False,
+    min_epochs=40,
     patience=5,
 ):
     """
@@ -207,6 +209,8 @@ def train_model(
         device (int, optional): GPU device index to use (-1 for CPU). Defaults to 0.
         dbg_run (bool, optional): Whether to run in debug mode with profiling. Defaults to False.
         skip_existing (bool, optional): Skip training if checkpoint exists. Defaults to False.
+        skip_if_trained (bool, optional): Skip training if checkpoint has min_epochs or more. Defaults to False.
+        min_epochs (int, optional): Minimum epochs required for skip_if_trained. Defaults to 40.
         patience (int, optional): Early stopping patience in epochs. Defaults to 5.
 
     Returns:
@@ -255,6 +259,14 @@ def train_model(
     if skip_existing and existing_ckpt is not None:
         print(f"Skipping training as checkpoint exists: {existing_ckpt}")
         return lit_model
+
+    # if skip_if_trained and checkpoint has reached min_epochs, skip re-training
+    if skip_if_trained and existing_ckpt is not None:
+        if curr_epoch >= min_epochs:
+            print(f"Skipping training as checkpoint has reached {curr_epoch} epochs (>= {min_epochs}): {existing_ckpt}")
+            return lit_model
+        else:
+            print(f"Checkpoint at {curr_epoch} epochs (< {min_epochs}), continuing training: {existing_ckpt}")
 
     # Load preprocessed datasets specific to model type
     # Zoo and Transformer models require different feature formats
@@ -369,6 +381,8 @@ def main(args):
             dropout=0.3,
             device=args.device,
             skip_existing=args.skip_existing,
+            skip_if_trained=args.skip_if_trained,
+            min_epochs=args.min_epochs,
             patience=args.patience,
         )
 
@@ -381,6 +395,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--skip-existing", action="store_true", help="Skip training models that already have a checkpoint"
+    )
+    parser.add_argument(
+        "--skip-if-trained", action="store_true", help="Skip training models with checkpoints that have >= min_epochs"
+    )
+    parser.add_argument(
+        "--min-epochs", type=int, default=40, help="Minimum epochs for --skip-if-trained (default: 40)"
     )
     parser.add_argument("--shuffle", "-S", action="store_true", help="Shuffle the hyperparameter gridsearch")
     parser.add_argument("--reverse", "-R", action="store_true", help="Reverse the hyperparameter gridsearch")
