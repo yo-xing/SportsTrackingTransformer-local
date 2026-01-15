@@ -19,6 +19,116 @@ Options:
 import subprocess
 import sys
 from argparse import ArgumentParser
+from pathlib import Path
+import shutil
+
+
+def check_and_sync_files():
+    """
+    Check for required files locally and sync from Google Drive if missing.
+
+    This function scans for:
+    1. Source datasets (11 features) - needed for filtering step
+    2. Filtered datasets (7 features) - needed for training step
+
+    Returns tuple of (source_files_exist, filtered_files_exist)
+    """
+    # Google Drive paths
+    INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate")
+    OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat")
+
+    # Local paths
+    INPUT_DIR = Path("data/datasets_extra_gamestate_23")
+    OUTPUT_DIR = Path("data/datasets_extra")
+
+    splits = ["train", "val", "test"]
+    model_type = "transformer"
+
+    print("\n" + "="*60)
+    print("Checking for required files...")
+    print("="*60 + "\n")
+
+    # Check source datasets (11 features)
+    source_files_exist = True
+    source_local_count = 0
+    source_drive_count = 0
+
+    print("Source datasets (11 features):")
+    for split in splits:
+        local_path = INPUT_DIR / model_type / f"{split}_dataset.pkl"
+        drive_path = INPUT_DRIVE_DIR / model_type / f"{split}_dataset.pkl"
+
+        if local_path.exists():
+            size_mb = local_path.stat().st_size / (1024 * 1024)
+            print(f"  ✓ Local: {local_path} ({size_mb:.1f} MB)")
+            source_local_count += 1
+        elif drive_path.exists():
+            size_mb = drive_path.stat().st_size / (1024 * 1024)
+            print(f"  📁 Drive: {drive_path} ({size_mb:.1f} MB)")
+            print(f"     → Copying to {local_path}...")
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(drive_path, local_path)
+            print(f"     ✓ Copied successfully")
+            source_local_count += 1
+            source_drive_count += 1
+        else:
+            print(f"  ❌ Missing: {split}_dataset.pkl (not in local or Drive)")
+            source_files_exist = False
+
+    print()
+
+    # Check filtered datasets (7 features)
+    filtered_files_exist = True
+    filtered_local_count = 0
+    filtered_drive_count = 0
+
+    print("Filtered datasets (7 features):")
+    for split in splits:
+        local_path = OUTPUT_DIR / model_type / f"{split}_dataset.pkl"
+        drive_path = OUTPUT_DRIVE_DIR / model_type / f"{split}_dataset.pkl"
+
+        if local_path.exists():
+            size_mb = local_path.stat().st_size / (1024 * 1024)
+            print(f"  ✓ Local: {local_path} ({size_mb:.1f} MB)")
+            filtered_local_count += 1
+        elif drive_path.exists():
+            size_mb = drive_path.stat().st_size / (1024 * 1024)
+            print(f"  📁 Drive: {drive_path} ({size_mb:.1f} MB)")
+            print(f"     → Copying to {local_path}...")
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(drive_path, local_path)
+            print(f"     ✓ Copied successfully")
+            filtered_local_count += 1
+            filtered_drive_count += 1
+        else:
+            print(f"  ⚠️  Missing: {split}_dataset.pkl (will be created by filtering)")
+            filtered_files_exist = False
+
+    print()
+
+    # Summary
+    if source_drive_count > 0:
+        print(f"✓ Synced {source_drive_count} source dataset(s) from Drive")
+    if filtered_drive_count > 0:
+        print(f"✓ Synced {filtered_drive_count} filtered dataset(s) from Drive")
+
+    if source_local_count == 3:
+        print(f"✓ All source datasets available locally ({source_local_count}/3)")
+    elif source_files_exist:
+        print(f"⚠️  Some source datasets available locally ({source_local_count}/3)")
+    else:
+        print(f"❌ Source datasets missing - filtering will fail")
+
+    if filtered_local_count == 3:
+        print(f"✓ All filtered datasets available locally ({filtered_local_count}/3)")
+    elif filtered_files_exist:
+        print(f"⚠️  Some filtered datasets available locally ({filtered_local_count}/3)")
+    else:
+        print(f"⚠️  Filtered datasets missing - will be created by filtering step")
+
+    print()
+
+    return source_files_exist, filtered_files_exist
 
 
 def run_command(cmd: str, description: str):
@@ -68,6 +178,19 @@ def main():
         print("Note: --skip-prep flag ignored (no prep step in this branch)")
     print("="*60 + "\n")
 
+    # Check and sync files from Google Drive
+    source_files_exist, filtered_files_exist = check_and_sync_files()
+
+    # Determine if we can skip filtering
+    if filtered_files_exist and skip_filter:
+        print("✓ Filtered datasets available, skipping filtering step\n")
+    elif not source_files_exist and not skip_filter:
+        print("❌ Error: Source datasets (11 features) not found")
+        print("   Cannot proceed with filtering step")
+        print("   Please ensure datasets are available on Google Drive at:")
+        print("   /content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate/transformer/")
+        sys.exit(1)
+
     # Step 1: Filter datasets from 11 features to 7 features
     if not skip_filter:
         run_command(
@@ -79,6 +202,21 @@ def main():
 
     # Step 2: Train transformer model
     if not args.skip_training:
+        # Verify filtered datasets exist before training
+        OUTPUT_DIR = Path("data/datasets_extra")
+        required_files = [
+            OUTPUT_DIR / "transformer" / f"{split}_dataset.pkl"
+            for split in ["train", "val", "test"]
+        ]
+        missing_files = [f for f in required_files if not f.exists()]
+
+        if missing_files:
+            print("❌ Error: Required filtered datasets missing for training:")
+            for f in missing_files:
+                print(f"   - {f}")
+            print("\nPlease run without --skip-filter to generate filtered datasets")
+            sys.exit(1)
+
         run_command(
             f"{python_cmd} src/train.py --model_type transformer --device {args.device} --patience {args.patience} {skip_existing_flag}",
             "Step 2: Training transformer model"

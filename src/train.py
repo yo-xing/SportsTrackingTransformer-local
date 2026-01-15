@@ -326,8 +326,9 @@ def main(args):
     # - lrs: Learning rate (1e-4 based on prior experimentation)
     # - model_dims: Model width (32, 128, 512) - # size of internal vector representation for each player in each layer
     # - num_layers: Model depth (1, 2, 4, 8) - number of stacked layers
+    # - Excluded: 512_L4 and 512_L8 (too large)
     #
-    # Total: 12 configurations per architecture × 2 architectures = 24 models
+    # Total: 10 configurations (3 model_dims × 4 num_layers - 2 excluded = 10)
 
     lrs = [1e-4]
     model_dims = [32, 128, 512]
@@ -335,6 +336,8 @@ def main(args):
 
     # Create gridsearch iterable
     gridsearch = list(product(model_dims, num_layers, lrs))
+    # Filter out 512_L4 and 512_L8 configurations
+    gridsearch = [(M, L, LR) for M, L, LR in gridsearch if not (M == 512 and L in [4, 8])]
     if args.shuffle:
         random.shuffle(gridsearch)
     if args.reverse:
