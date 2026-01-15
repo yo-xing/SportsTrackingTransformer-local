@@ -327,9 +327,10 @@ def main(args):
     # - lrs: Learning rate (1e-4 based on prior experimentation)
     # - model_dims: Model width (32, 128, 512) - # size of internal vector representation for each player in each layer
     # - num_layers: Model depth (1, 2, 4, 8) - number of stacked layers
-    # - Excluded: 512_L4 and 512_L8 (too large)
+    # - Custom additions: M64_L4 (added to test medium-width model)
+    # - Excluded: M32_L8, M512_L4, M512_L8 (too large or inefficient)
     #
-    # Total: 10 configurations (3 model_dims × 4 num_layers - 2 excluded = 10)
+    # Total: 10 configurations (3 model_dims × 4 num_layers + 1 custom - 3 excluded = 10)
 
     lrs = [1e-4]
     model_dims = [32, 128, 512]
@@ -337,8 +338,10 @@ def main(args):
 
     # Create gridsearch iterable
     gridsearch = list(product(model_dims, num_layers, lrs))
-    # Filter out 512_L4 and 512_L8 configurations
-    gridsearch = [(M, L, LR) for M, L, LR in gridsearch if not (M == 512 and L in [4, 8])]
+    # Filter out M32_L8, M512_L4, and M512_L8 configurations
+    gridsearch = [(M, L, LR) for M, L, LR in gridsearch if not ((M == 32 and L == 8) or (M == 512 and L in [4, 8]))]
+    # Add M64_L4 custom configuration
+    gridsearch.append((64, 4, 1e-4))
     if args.shuffle:
         random.shuffle(gridsearch)
     if args.reverse:
@@ -351,8 +354,8 @@ def main(args):
     # Train models for each hyperparameter combination
     for M, L, LR in tqdm(gridsearch, desc="Hyperparam Gridsearch"):
         # Dynamic batch size based on model size to avoid OOM
-        # Use 512 for larger models (8+ layers or wide+deep models), 1024 otherwise
-        if L >= 8 or (M >= 64 and L >= 4):
+        # Use 512 for models with M > 128, 1024 otherwise
+        if M > 128:
             batch_size = 512
         else:
             batch_size = 1024
@@ -384,6 +387,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_type", type=str, default="transformer", help="Type of model to train ('transformer' or 'zoo')"
     )
-    parser.add_argument("--patience", "-P", type=int, default=10, help="Early stopping patience")
+    parser.add_argument("--patience", "-P", type=int, default=6, help="Early stopping patience")
     args = parser.parse_args()
     main(args)
