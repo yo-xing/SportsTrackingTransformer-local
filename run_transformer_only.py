@@ -38,7 +38,13 @@ def run_command(cmd: str, description: str):
 
 def main():
     parser = ArgumentParser(description="Run transformer training pipeline with filtered features")
-    parser.add_argument("--skip-filter", action="store_true", help="Skip dataset filtering step")
+    # Legacy flags for consistency with other branches
+    parser.add_argument("--skip-prep", action="store_true", help="Skip data preparation (not used in this branch)")
+    parser.add_argument("--skip-precompute", action="store_true", help="Skip dataset filtering step")
+    parser.add_argument("--sample", type=float, default=None, help="Sample fraction of data (not used - datasets pre-filtered)")
+
+    # Standard flags
+    parser.add_argument("--skip-filter", action="store_true", help="Skip dataset filtering step (same as --skip-precompute)")
     parser.add_argument("--skip-training", action="store_true", help="Skip training (only for testing)")
     parser.add_argument("--skip-existing", action="store_true", help="Skip training models with existing checkpoints")
     parser.add_argument("--device", type=int, default=0, help="GPU device to use (default: 0)")
@@ -49,22 +55,27 @@ def main():
     skip_existing_flag = "--skip-existing" if args.skip_existing else ""
     python_cmd = "uv run python" if args.use_uv else "python"
 
+    # --skip-precompute is an alias for --skip-filter
+    skip_filter = args.skip_filter or args.skip_precompute
+
     print("\n" + "="*60)
     print("23-Entity Transformer Training Pipeline")
     print("Features: 7 (6 player + 1 game state)")
     print("Game State: distanceToGoal only")
-    if args.use_uv:
-        print("Using: uv run python")
+    if args.sample:
+        print(f"Note: --sample {args.sample} flag ignored (datasets are pre-filtered)")
+    if args.skip_prep:
+        print("Note: --skip-prep flag ignored (no prep step in this branch)")
     print("="*60 + "\n")
 
     # Step 1: Filter datasets from 11 features to 7 features
-    if not args.skip_filter:
+    if not skip_filter:
         run_command(
             f"{python_cmd} filter_features.py",
             "Step 1: Filtering datasets (11 features → 7 features)"
         )
     else:
-        print("\n⏭️  Skipping dataset filtering (--skip-filter)\n")
+        print("\n⏭️  Skipping dataset filtering (--skip-precompute)\n")
 
     # Step 2: Train transformer model
     if not args.skip_training:
