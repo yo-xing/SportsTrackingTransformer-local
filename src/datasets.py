@@ -212,6 +212,8 @@ def _read_features(split: str) -> pl.DataFrame:
     This is the biggest win for the train split.
     """
     path = PREPPED_DATA_DIR / f"{split}_features.parquet"
+
+    # Base columns that should always exist
     cols = [
         "gameId",
         "playId",
@@ -224,27 +226,39 @@ def _read_features(split: str) -> pl.DataFrame:
         "vy",
         "side",
         "is_ball_carrier",
-        "distanceToGoal",
     ]
+
+    # Check which game state features exist and add them
+    # Read schema first to see what columns are available
+    schema = pl.read_parquet_schema(path)
+    game_state_features = ["yardsToGo", "down", "distanceToGoal", "quarter", "half_seconds_remaining"]
+    for feature in game_state_features:
+        if feature in schema:
+            cols.append(feature)
+
     df = pl.read_parquet(path, columns=cols)
 
     # Downcast: big memory win on train
-    df = df.with_columns(
-        [
-            pl.col("x_rel").cast(pl.Float32),
-            pl.col("y_rel").cast(pl.Float32),
-            pl.col("vx").cast(pl.Float32),
-            pl.col("vy").cast(pl.Float32),
-            pl.col("distanceToGoal").cast(pl.Float32),
-            pl.col("side").cast(pl.Int8),
-            pl.col("is_ball_carrier").cast(pl.Int8),
-            pl.col("mirrored").cast(pl.Boolean),
-            pl.col("gameId").cast(pl.Int32),
-            pl.col("playId").cast(pl.Int32),
-            pl.col("frameId").cast(pl.Int32),
-            pl.col("nflId").cast(pl.Int32),
-        ]
-    )
+    downcast_exprs = [
+        pl.col("x_rel").cast(pl.Float32),
+        pl.col("y_rel").cast(pl.Float32),
+        pl.col("vx").cast(pl.Float32),
+        pl.col("vy").cast(pl.Float32),
+        pl.col("side").cast(pl.Int8),
+        pl.col("is_ball_carrier").cast(pl.Int8),
+        pl.col("mirrored").cast(pl.Boolean),
+        pl.col("gameId").cast(pl.Int32),
+        pl.col("playId").cast(pl.Int32),
+        pl.col("frameId").cast(pl.Int32),
+        pl.col("nflId").cast(pl.Int32),
+    ]
+
+    # Downcast game state features if they exist
+    for feature in game_state_features:
+        if feature in cols:
+            downcast_exprs.append(pl.col(feature).cast(pl.Float32))
+
+    df = df.with_columns(downcast_exprs)
     return df
 
 
