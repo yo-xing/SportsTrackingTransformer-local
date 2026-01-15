@@ -20,7 +20,9 @@ from tqdm import tqdm
 # Indices to keep from the original 11 features
 KEEP_INDICES = [0, 1, 2, 3, 4, 5, 8]  # x_rel, y_rel, vx, vy, side, is_ball_carrier, distanceToGoal
 
-INPUT_DIR = Path("data/datasets_extra/")
+# Input: 11-feature datasets from add-game-state-features branch
+INPUT_DIR = Path("data/datasets_extra_gamestate_23/")
+# Output: 7-feature datasets for 23-entity branch
 OUTPUT_DIR = Path("data/datasets_extra/")
 
 
