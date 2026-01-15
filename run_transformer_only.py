@@ -128,7 +128,49 @@ def check_and_sync_files():
 
     print()
 
-    return source_files_exist, filtered_files_exist
+    # Check target files (needed by dataset loading)
+    TARGET_DIR = Path("data/split_prepped_data_extra")
+    TARGET_DRIVE_DIR = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate")
+
+    targets_exist = True
+    targets_local_count = 0
+    targets_drive_count = 0
+
+    print("Target files (needed for training):")
+    for split in splits:
+        local_path = TARGET_DIR / f"{split}_targets.parquet"
+        drive_path = TARGET_DRIVE_DIR / f"{split}_targets.parquet"
+
+        if local_path.exists():
+            size_mb = local_path.stat().st_size / (1024 * 1024)
+            print(f"  ✓ Local: {local_path} ({size_mb:.1f} MB)")
+            targets_local_count += 1
+        elif drive_path.exists():
+            size_mb = drive_path.stat().st_size / (1024 * 1024)
+            print(f"  📁 Drive: {drive_path} ({size_mb:.1f} MB)")
+            print(f"     → Copying to {local_path}...")
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(drive_path, local_path)
+            print(f"     ✓ Copied successfully")
+            targets_local_count += 1
+            targets_drive_count += 1
+        else:
+            print(f"  ❌ Missing: {split}_targets.parquet (not in local or Drive)")
+            targets_exist = False
+
+    print()
+
+    if targets_drive_count > 0:
+        print(f"✓ Synced {targets_drive_count} target file(s) from Drive")
+
+    if targets_local_count == 3:
+        print(f"✓ All target files available locally ({targets_local_count}/3)")
+    else:
+        print(f"⚠️  Target files missing - training will fail ({targets_local_count}/3)")
+
+    print()
+
+    return source_files_exist, filtered_files_exist, targets_exist
 
 
 def run_command(cmd: str, description: str):
@@ -179,7 +221,15 @@ def main():
     print("="*60 + "\n")
 
     # Check and sync files from Google Drive
-    source_files_exist, filtered_files_exist = check_and_sync_files()
+    source_files_exist, filtered_files_exist, targets_exist = check_and_sync_files()
+
+    # Check for target files
+    if not targets_exist:
+        print("❌ Error: Target files not found")
+        print("   Cannot proceed without target files")
+        print("   Please ensure target files are available on Google Drive at:")
+        print("   /content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate/")
+        sys.exit(1)
 
     # Determine if we can skip filtering
     if filtered_files_exist and skip_filter:

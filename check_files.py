@@ -60,6 +60,28 @@ def check_files():
             filtered_missing.append((drive_path, local_path))
         print()
 
+    # Check target files
+    print()
+    print("TARGET FILES - needed for training:")
+    print("-" * 70)
+    TARGET_DIR = Path("data/split_prepped_data_extra")
+    TARGET_DRIVE_DIR = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate")
+
+    targets_missing = []
+    for split in splits:
+        local_path = TARGET_DIR / f"{split}_targets.parquet"
+        drive_path = TARGET_DRIVE_DIR / f"{split}_targets.parquet"
+
+        if local_path.exists():
+            size_mb = local_path.stat().st_size / (1024 * 1024)
+            print(f"✓ LOCAL:  {local_path}")
+            print(f"          Size: {size_mb:.1f} MB")
+        else:
+            print(f"✗ MISSING: {local_path}")
+            print(f"  DRIVE:   {drive_path}")
+            targets_missing.append((drive_path, local_path))
+        print()
+
     # Show copy commands
     print()
     print("="*70)
@@ -87,16 +109,27 @@ def check_files():
         print("✓ All filtered datasets present locally")
         print()
 
+    if targets_missing:
+        print("# Copy target files from Google Drive:")
+        for drive_path, local_path in targets_missing:
+            print(f"mkdir -p {local_path.parent}")
+            print(f"cp \"{drive_path}\" \"{local_path}\"")
+            print()
+    else:
+        print("✓ All target files present locally")
+        print()
+
     # Summary
     print("="*70)
     print("SUMMARY")
     print("="*70)
-    total_missing = len(source_missing) + len(filtered_missing)
+    total_missing = len(source_missing) + len(filtered_missing) + len(targets_missing)
     if total_missing == 0:
         print("✓ All required files are present locally")
     else:
         print(f"⚠️  {len(source_missing)} source dataset(s) missing")
         print(f"⚠️  {len(filtered_missing)} filtered dataset(s) missing")
+        print(f"⚠️  {len(targets_missing)} target file(s) missing")
         print(f"\nTotal: {total_missing} file(s) need to be copied from Google Drive")
     print()
 
