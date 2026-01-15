@@ -350,9 +350,16 @@ def main(args):
 
     # Train models for each hyperparameter combination
     for M, L, LR in tqdm(gridsearch, desc="Hyperparam Gridsearch"):
+        # Dynamic batch size based on model size to avoid OOM
+        # Use 512 for larger models (8+ layers or wide+deep models), 1024 otherwise
+        if L >= 8 or (M >= 64 and L >= 4):
+            batch_size = 512
+        else:
+            batch_size = 1024
+
         train_model(
             model_type=args.model_type,
-            batch_size=256,
+            batch_size=batch_size,
             model_dim=M,
             num_layers=L,
             learning_rate=LR,
