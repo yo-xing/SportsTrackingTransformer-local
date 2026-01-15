@@ -22,7 +22,7 @@ KEEP_INDICES = [0, 1, 2, 3, 4, 5, 8]  # x_rel, y_rel, vx, vy, side, is_ball_carr
 
 # Input: 11-feature datasets from add-game-state-features branch
 INPUT_DIR = Path("data/datasets_extra_gamestate_23/")
-INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate_23")
+INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate")
 
 # Output: 7-feature datasets for 23-entity branch
 OUTPUT_DIR = Path("data/datasets_extra/")
