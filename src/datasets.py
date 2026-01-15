@@ -162,6 +162,11 @@ class BDB2024_Dataset(Dataset):
         # Player-specific features (6) + Game state feature (1: distanceToGoal) = 7 total
         features = ["x_rel", "y_rel", "vx", "vy", "side", "is_ball_carrier", "distanceToGoal"]
         x = frame_df[features].to_numpy(dtype=np.float32)
+
+        # Normalize distanceToGoal to [0, 1] range (originally 0-100 yards)
+        # Column index 6 is distanceToGoal (last column)
+        x[:, 6] = x[:, 6] / 100.0
+
         assert x.shape == (22, len(features)), f"Expected shape (22, {len(features)}), got {x.shape}"
         return x
 
