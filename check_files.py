@@ -9,7 +9,7 @@ def check_files():
 
     # Google Drive paths
     INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate")
-    OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat")
+    OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_23entity_full")
 
     # Local paths
     INPUT_DIR = Path("data/datasets_extra_gamestate_23")

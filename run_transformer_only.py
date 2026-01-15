@@ -35,7 +35,7 @@ def check_and_sync_files():
     """
     # Google Drive paths
     INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate")
-    OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat")
+    OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_23entity_full")
 
     # Local paths
     INPUT_DIR = Path("data/datasets_extra_gamestate_23")
@@ -281,8 +281,8 @@ def main():
     print("Pipeline Complete!")
     print("="*60 + "\n")
     print("Next steps:")
-    print("  - Check tensorboard logs: tensorboard --logdir models/transformer")
-    print("  - View results: models/transformer/M{dim}_L{layers}_LR{lr}/checkpoints/*.results.parquet")
+    print("  - Check tensorboard logs: tensorboard --logdir models_23entity_full/transformer")
+    print("  - View results: models_23entity_full/transformer/M{dim}_L{layers}_LR{lr}/checkpoints/*.results.parquet")
     print("  - Generate summary: python src/generate_results_summary.py")
     print()
 

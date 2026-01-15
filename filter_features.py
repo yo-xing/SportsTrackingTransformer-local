@@ -30,7 +30,7 @@ INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_
 
 # Output: 7-feature datasets for 23-entity branch
 OUTPUT_DIR = Path("data/datasets_extra/")
-OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat")
+OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_23entity_full")
 
 
 class _DatasetUnpickler(pickle.Unpickler):
