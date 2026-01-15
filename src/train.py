@@ -14,6 +14,7 @@ Classes:
     None (uses classes from other modules)
 """
 
+import os
 import random
 import re
 from argparse import ArgumentParser
@@ -23,6 +24,7 @@ from pathlib import Path
 import lightning.pytorch.callbacks as callbacks
 import numpy as np
 import polars as pl
+import psutil
 import torch
 from lightning.pytorch import Trainer
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -44,6 +46,66 @@ else:
     print(f"Using local path for checkpoints: {MODELS_PATH}")
 
 MODELS_PATH.mkdir(exist_ok=True, parents=True)
+
+
+def get_optimal_dataloader_config():
+    """
+    Determine optimal num_workers and batch_size based on available system resources.
+
+    Detects GPU type and system RAM to configure DataLoader settings:
+    - A100 instances (157GB RAM): 10-12 workers, larger batches
+    - L4 instances (53GB RAM): 4-6 workers, smaller batches
+    - Other instances: Conservative defaults
+
+    Returns:
+        dict: Configuration with 'num_workers_train', 'num_workers_pred', 'batch_size_multiplier'
+    """
+    # Get total system RAM in GB
+    total_ram_gb = psutil.virtual_memory().total / (1024**3)
+
+    # Get GPU info if available
+    gpu_name = None
+    if torch.cuda.is_available():
+        try:
+            gpu_name = torch.cuda.get_device_name(0)
+        except:
+            pass
+
+    print(f"Detected system RAM: {total_ram_gb:.1f} GB")
+    if gpu_name:
+        print(f"Detected GPU: {gpu_name}")
+
+    # Configure based on RAM (more reliable than GPU detection)
+    if total_ram_gb >= 140:  # A100 instance or similar (157GB)
+        num_workers_train = 12
+        num_workers_pred = 10
+        batch_size_multiplier = 1.0
+        print("Using A100-optimized settings: 12/10 workers, standard batch sizes")
+    elif total_ram_gb >= 48:  # L4 instance (53GB) or similar
+        num_workers_train = 6
+        num_workers_pred = 4
+        batch_size_multiplier = 0.75
+        print("Using L4-optimized settings: 6/4 workers, reduced batch sizes")
+    elif total_ram_gb >= 24:  # Mid-tier instance
+        num_workers_train = 4
+        num_workers_pred = 3
+        batch_size_multiplier = 0.5
+        print("Using mid-tier settings: 4/3 workers, reduced batch sizes")
+    else:  # Low RAM instance (< 24GB)
+        num_workers_train = 2
+        num_workers_pred = 2
+        batch_size_multiplier = 0.5
+        print("Using low-memory settings: 2/2 workers, reduced batch sizes")
+
+    return {
+        'num_workers_train': num_workers_train,
+        'num_workers_pred': num_workers_pred,
+        'batch_size_multiplier': batch_size_multiplier,
+    }
+
+
+# Get optimal configuration based on system resources
+DATALOADER_CONFIG = get_optimal_dataloader_config()
 
 # Set random seeds for reproducibility
 torch.manual_seed(42)
@@ -83,10 +145,12 @@ def predict_model_as_df(model: LitModel = None, ckpt_path: Path = None, devices=
     test_ds: BDB2024_Dataset = load_datasets(model.model_type, split="test")
 
     # Create unshuffled dataloaders for prediction
+    # Use dynamic num_workers based on system resources
+    num_workers_pred = DATALOADER_CONFIG['num_workers_pred']
     dataloaders = {
-        "train": DataLoader(train_ds, batch_size=1024, shuffle=False, num_workers=10),
-        "val": DataLoader(val_ds, batch_size=1024, shuffle=False, num_workers=10),
-        "test": DataLoader(test_ds, batch_size=1024, shuffle=False, num_workers=10),
+        "train": DataLoader(train_ds, batch_size=1024, shuffle=False, num_workers=num_workers_pred),
+        "val": DataLoader(val_ds, batch_size=1024, shuffle=False, num_workers=num_workers_pred),
+        "test": DataLoader(test_ds, batch_size=1024, shuffle=False, num_workers=num_workers_pred),
     }
 
     # Yard values for computing expected yards from probability distribution
@@ -276,9 +340,10 @@ def train_model(
     # Create dataloaders with optimized settings
     # Training: smaller batch size, shuffled for better generalization
     # Validation: larger batch size (1024), no shuffle for consistent evaluation
-    # Note: num_workers set to 12 (balanced for Colab environment)
-    train_dataloader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=12)
-    val_dataloader = DataLoader(val_ds, batch_size=1024, shuffle=False, pin_memory=True, num_workers=12)
+    # num_workers dynamically set based on system resources (A100: 12, L4: 6, etc.)
+    num_workers_train = DATALOADER_CONFIG['num_workers_train']
+    train_dataloader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_workers_train)
+    val_dataloader = DataLoader(val_ds, batch_size=1024, shuffle=False, pin_memory=True, num_workers=num_workers_train)
 
     # Set up devices
     devices = [device] if device >= 0 else [0, 1]  # if device is specified, use it, otherwise pick 1 gpu to use
@@ -366,11 +431,12 @@ def main(args):
     # Train models for each hyperparameter combination
     for M, L, LR in tqdm(gridsearch, desc="Hyperparam Gridsearch"):
         # Dynamic batch size based on model size to avoid OOM
-        # Use 512 for models with M > 128, 1024 otherwise
-        if M > 128:
-            batch_size = 512
-        else:
-            batch_size = 1024
+        # Base sizes: 512 for M > 128, 1024 otherwise
+        # Then apply system-based multiplier (A100: 1.0, L4: 0.75, etc.)
+        base_batch_size = 512 if M > 128 else 1024
+        batch_size = int(base_batch_size * DATALOADER_CONFIG['batch_size_multiplier'])
+        # Ensure batch size is at least 64
+        batch_size = max(64, batch_size)
 
         # Dynamic patience based on model size
         # Larger models need more patience to converge
