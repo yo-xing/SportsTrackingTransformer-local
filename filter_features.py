@@ -113,7 +113,7 @@ def main(input_dir: Path = INPUT_DIR, output_dir: Path = OUTPUT_DIR,
     """Filter all datasets, using Google Drive caching."""
 
     for split in ["test", "val", "train"]:
-        for model_type in ["transformer", "zoo"]:
+        for model_type in ["transformer"]:
             output_file = output_dir / model_type / f"{split}_dataset.pkl"
 
             # Check if already exists in output Drive cache
