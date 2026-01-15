@@ -354,19 +354,28 @@ def main(args):
     """
     # Hyperparameter search space:
     # - lrs: Learning rate (1e-4 based on prior experimentation)
-    # - model_dims: Model width (32, 64) - # size of internal vector representation for each player in each layer
+    # - model_dims: Model width (32, 64, 128, 512) - size of internal vector representation for each player in each layer
     # - num_layers: Model depth (1, 2, 4, 8) - number of stacked layers
     #
-    # Removed M128 due to memory constraints during evaluation
-    # Added L8 to test deeper architectures
-    # Total: 8 configurations (2 dims × 4 layers × 1 lr)
+    # Re-added M128 and added M512 to test higher capacity models
+    # M512 only tested with L2 and L4 (not L1/L8) due to memory constraints
+    # Total: 18 configurations (4 dims × varying layers × 1 lr)
 
     lrs = [1e-4]
-    model_dims = [32, 64]  # Removed M128 due to OOM during evaluation
-    num_layers = [1, 2, 4, 8]  # Added L=8 to test deeper models
+    model_dims = [32, 64, 128, 512]
+    num_layers = [1, 2, 4, 8]
 
-    # Create gridsearch iterable
-    gridsearch = list(product(model_dims, num_layers, lrs))
+    # Create gridsearch with M512 restricted to L2 and L4 only
+    gridsearch = []
+    for M in model_dims:
+        for L in num_layers:
+            # M512 only with L2 and L4 (skip L1 and L8 due to memory/effectiveness)
+            if M == 512 and L not in [2, 4]:
+                continue
+            gridsearch.append((M, L, lrs[0]))
+
+    # Total: M32(4) + M64(4) + M128(4) + M512(2) = 18 configurations
+
     if args.shuffle:
         random.shuffle(gridsearch)
     if args.reverse:
@@ -382,6 +391,7 @@ def main(args):
         # M32: minimal regularization (dropout=0.3, weight_decay=0.0, patience=4)
         # M64: light regularization (dropout=0.35, weight_decay=0.005, patience=6)
         # M128: stronger regularization (dropout=0.4, weight_decay=0.01, patience=10)
+        # M512: heavy regularization (dropout=0.45, weight_decay=0.02, patience=12)
         # Higher patience for larger models because regularization slows down convergence
         if M == 32:
             dropout = 0.3
@@ -391,10 +401,14 @@ def main(args):
             dropout = 0.35
             weight_decay = 0.005
             patience = max(6, args.patience)
-        else:  # M == 128
+        elif M == 128:
             dropout = 0.4
             weight_decay = 0.01
             patience = max(10, args.patience)
+        else:  # M == 512
+            dropout = 0.45
+            weight_decay = 0.02
+            patience = max(12, args.patience)
 
         train_model(
             model_type=args.model_type,
