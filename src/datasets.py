@@ -157,25 +157,30 @@ class BDB2024_Dataset(Dataset):
                         self.feature_arrays[key] = feature_array
                         pbar.update(1)
 
-                # Save checkpoint after each chunk (allows resume if interrupted)
-                # Save to both local and Drive for redundancy
-                checkpoint_data = {
-                    "chunk_idx": chunk_idx,
-                    "tgt_arrays": self.tgt_arrays,
-                    "feature_arrays": self.feature_arrays,
-                }
-                try:
-                    # Save locally first
-                    with open(checkpoint_path, "wb") as f:
-                        pickle.dump(checkpoint_data, f, protocol=5)
+                # Save checkpoint every 4 chunks (or on last chunk) to reduce I/O overhead
+                # This balances resume capability with performance
+                is_last_chunk = (chunk_idx == n_chunks - 1)
+                should_save_checkpoint = ((chunk_idx + 1) % 4 == 0) or is_last_chunk
 
-                    # Also save to Drive if available
-                    if drive_checkpoint_path:
-                        drive_checkpoint_path.parent.mkdir(exist_ok=True, parents=True)
-                        with open(drive_checkpoint_path, "wb") as f:
+                if should_save_checkpoint:
+                    checkpoint_data = {
+                        "chunk_idx": chunk_idx,
+                        "tgt_arrays": self.tgt_arrays,
+                        "feature_arrays": self.feature_arrays,
+                    }
+                    try:
+                        # Save locally first
+                        with open(checkpoint_path, "wb") as f:
                             pickle.dump(checkpoint_data, f, protocol=5)
-                except Exception as e:
-                    print(f"\nWarning: Could not save checkpoint: {e}")
+
+                        # Also save to Drive if available
+                        if drive_checkpoint_path:
+                            drive_checkpoint_path.parent.mkdir(exist_ok=True, parents=True)
+                            with open(drive_checkpoint_path, "wb") as f:
+                                pickle.dump(checkpoint_data, f, protocol=5)
+                        print(f"  Checkpoint saved at chunk {chunk_idx + 1}/{n_chunks}")
+                    except Exception as e:
+                        print(f"\nWarning: Could not save checkpoint: {e}")
 
                 # Help Python + glibc release/compact between chunks
                 gc.collect()
