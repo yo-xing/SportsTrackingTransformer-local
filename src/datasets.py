@@ -171,6 +171,26 @@ class BDB2024_Dataset(Dataset):
         # Only use features that exist in the dataframe
         available_features = [f for f in features if f in frame_df.columns]
         x = frame_df[available_features].to_numpy(dtype=np.float32)
+
+        # Normalize game state features to [0, 1] range for better training stability
+        # This helps prevent overfitting by putting all features on similar scales
+        for i, feature in enumerate(available_features):
+            if feature == "yardsToGo":
+                # Normalize by 40 yards (typical max, clips values > 40)
+                x[:, i] = np.clip(x[:, i] / 40.0, 0, 1)
+            elif feature == "down":
+                # Normalize down (1-4) to [0, 1]
+                x[:, i] = (x[:, i] - 1.0) / 3.0
+            elif feature == "distanceToGoal":
+                # Normalize to [0, 1] range (0-100 yards)
+                x[:, i] = x[:, i] / 100.0
+            elif feature == "quarter":
+                # Normalize quarter (1-4) to [0, 1]
+                x[:, i] = (x[:, i] - 1.0) / 3.0
+            elif feature == "half_seconds_remaining":
+                # Normalize to [0, 1] range (0-1800 seconds = 30 min)
+                x[:, i] = x[:, i] / 1800.0
+
         expected_rows = 23  # 22 players + 1 football
         assert x.shape == (expected_rows, len(available_features)), f"Expected shape ({expected_rows}, {len(available_features)}), got {x.shape}"
         return x
