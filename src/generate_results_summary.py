@@ -47,8 +47,8 @@ RESULTS_DIR = Path("results")
 RESULTS_DIR.mkdir(exist_ok=True)
 
 # Use Google Drive for models if available (Colab), otherwise local
-GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models")
-LOCAL_MODELS_PATH = Path("models")
+GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models_23entity_full")
+LOCAL_MODELS_PATH = Path("models_23entity_full")
 
 if GDRIVE_MODELS_PATH.parent.exists():
     MODELS_BASE_DIR = GDRIVE_MODELS_PATH
@@ -359,7 +359,7 @@ def find_all_model_checkpoints() -> list[dict]:
     Returns:
         list[dict]: List of config dicts with model_type, model_dim, num_layers, and best checkpoint path.
     """
-    models_base = Path("models")
+    models_base = MODELS_BASE_DIR
     configs = []
 
     for model_type in ["zoo", "transformer"]:

@@ -36,8 +36,8 @@ from shutil import copy
 from train import get_epoch_val_loss_from_ckpt
 
 # Use Google Drive for models if available (Colab), otherwise local
-GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models")
-LOCAL_MODELS_PATH = Path("models")
+GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models_23entity_full")
+LOCAL_MODELS_PATH = Path("models_23entity_full")
 
 if GDRIVE_MODELS_PATH.parent.exists():
     MODELS_PATH = GDRIVE_MODELS_PATH
