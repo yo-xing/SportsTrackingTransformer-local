@@ -43,20 +43,24 @@ def main():
     parser.add_argument("--skip-existing", action="store_true", help="Skip training models with existing checkpoints")
     parser.add_argument("--device", type=int, default=0, help="GPU device to use (default: 0)")
     parser.add_argument("--patience", type=int, default=10, help="Early stopping patience (default: 10)")
+    parser.add_argument("--use-uv", action="store_true", help="Use uv run for subprocess commands")
     args = parser.parse_args()
 
     skip_existing_flag = "--skip-existing" if args.skip_existing else ""
+    python_cmd = "uv run python" if args.use_uv else "python"
 
     print("\n" + "="*60)
     print("23-Entity Transformer Training Pipeline")
     print("Features: 7 (6 player + 1 game state)")
     print("Game State: distanceToGoal only")
+    if args.use_uv:
+        print("Using: uv run python")
     print("="*60 + "\n")
 
     # Step 1: Filter datasets from 11 features to 7 features
     if not args.skip_filter:
         run_command(
-            "python filter_features.py",
+            f"{python_cmd} filter_features.py",
             "Step 1: Filtering datasets (11 features → 7 features)"
         )
     else:
@@ -65,7 +69,7 @@ def main():
     # Step 2: Train transformer model
     if not args.skip_training:
         run_command(
-            f"python src/train.py --model_type transformer --device {args.device} --patience {args.patience} {skip_existing_flag}",
+            f"{python_cmd} src/train.py --model_type transformer --device {args.device} --patience {args.patience} {skip_existing_flag}",
             "Step 2: Training transformer model"
         )
     else:

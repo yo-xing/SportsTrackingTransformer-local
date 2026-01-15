@@ -13,14 +13,17 @@ This branch is configured to run the transformer model with:
 ## Quick Start
 
 ```bash
-# Run the complete pipeline (filter + train)
+# Using uv (recommended if you have uv installed)
+uv run python run_transformer_only.py --use-uv
+
+# Or using system/venv python
 ./run_transformer_only.py
 
-# Or skip filtering if already done
-./run_transformer_only.py --skip-filter
+# Skip filtering if already done
+uv run python run_transformer_only.py --use-uv --skip-filter
 
-# Or skip training models with existing checkpoints
-./run_transformer_only.py --skip-existing
+# Skip training models with existing checkpoints
+uv run python run_transformer_only.py --use-uv --skip-existing
 ```
 
 ## Files Modified
@@ -50,26 +53,30 @@ This branch is configured to run the transformer model with:
 The `run_transformer_only.py` script is the recommended way to run the complete pipeline:
 
 ```bash
-# Full pipeline (filter datasets + train models)
+# Using uv (recommended - manages dependencies automatically)
+uv run python run_transformer_only.py --use-uv
+
+# Or using system/venv python
 ./run_transformer_only.py
 
 # Skip filtering if datasets are already filtered
-./run_transformer_only.py --skip-filter
+uv run python run_transformer_only.py --use-uv --skip-filter
 
 # Skip training models that have existing checkpoints
-./run_transformer_only.py --skip-existing
+uv run python run_transformer_only.py --use-uv --skip-existing
 
 # Use a different GPU
-./run_transformer_only.py --device 1
+uv run python run_transformer_only.py --use-uv --device 1
 
 # Custom early stopping patience
-./run_transformer_only.py --patience 15
+uv run python run_transformer_only.py --use-uv --patience 15
 
 # Combine flags
-./run_transformer_only.py --skip-filter --skip-existing --device 0
+uv run python run_transformer_only.py --use-uv --skip-filter --skip-existing --device 0
 ```
 
 **Pipeline flags:**
+- `--use-uv`: Use uv for running subprocess commands (required when using `uv run python`)
 - `--skip-filter`: Skip dataset filtering step (assumes datasets already filtered)
 - `--skip-training`: Skip training entirely (for testing pipeline)
 - `--skip-existing`: Skip training models that already have checkpoints
