@@ -13,9 +13,13 @@ We keep indices [0, 1, 2, 3, 4, 5, 8] = 7 features total
 
 import argparse
 import pickle
+import sys
 from pathlib import Path
 import numpy as np
 from tqdm import tqdm
+
+# Add src to Python path to import datasets module
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 # Indices to keep from the original 11 features
 KEEP_INDICES = [0, 1, 2, 3, 4, 5, 8]  # x_rel, y_rel, vx, vy, side, is_ball_carrier, distanceToGoal
