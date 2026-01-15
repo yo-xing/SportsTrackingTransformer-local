@@ -56,11 +56,13 @@ class BDB2024_Dataset(Dataset):
         model_type: str,
         feature_df: pl.DataFrame,
         tgt_df: pl.DataFrame,
+        split: str = "unknown",
     ):
         if model_type not in ["transformer", "zoo"]:
             raise ValueError("model_type must be either 'transformer' or 'zoo'")
 
         self.model_type = model_type
+        self.split = split
 
         # Sort keys to ensure deterministic ordering across runs
         self.keys = sorted(feature_df.select(["gameId", "playId", "mirrored", "frameId"]).unique().rows())
@@ -95,7 +97,8 @@ class BDB2024_Dataset(Dataset):
         n_chunks = (n + MAX_KEYS_PER_CHUNK - 1) // MAX_KEYS_PER_CHUNK
 
         # Check for checkpoint file to resume from (try Drive first, then local)
-        checkpoint_filename = f".checkpoint_{model_type}_{id(self.keys)}.pkl"
+        # Use stable name based on split and model_type
+        checkpoint_filename = f".checkpoint_{model_type}_{split}.pkl"
         checkpoint_path = DATASET_DIR / checkpoint_filename
         drive_checkpoint_path = DRIVE_DIR / checkpoint_filename if DRIVE_DIR else None
 
@@ -178,11 +181,10 @@ class BDB2024_Dataset(Dataset):
                 gc.collect()
                 _malloc_trim()
 
-        # Clean up checkpoint files after successful completion
-        if checkpoint_path.exists():
-            checkpoint_path.unlink()
-        if drive_checkpoint_path and drive_checkpoint_path.exists():
-            drive_checkpoint_path.unlink()
+        # Keep checkpoint files after successful completion for redundancy
+        # They serve as backups and allow recovery if the final dataset gets corrupted
+        # User can manually delete them if needed
+        print(f"\n✓ Precompute complete. Checkpoint saved for recovery: {checkpoint_path.name}")
 
         # Drop big pandas partitions before pickling dataset (reduces RAM spikes + output size)
         self.feature_df_partition = None
@@ -505,15 +507,22 @@ def main(
             out_dir = DATASET_DIR / model_type
             local_path = out_dir / f"{split}_dataset.pkl"
 
-            # Skip if already loaded from cache
+            # Safety check: Skip if already exists locally OR in Drive
+            drive_path = _get_drive_path(model_type, split)
             if local_path.exists():
-                print(f"Skipping {model_type}/{split} - already loaded from cache")
+                print(f"✓ Skipping {model_type}/{split} - already exists locally")
+                continue
+            if drive_path and drive_path.exists():
+                print(f"⚠️  WARNING: {model_type}/{split} already exists in Drive!")
+                print(f"   Drive path: {drive_path}")
+                print(f"   Skipping to avoid overwriting completed dataset")
+                print(f"   To recompute, manually delete the Drive file first")
                 continue
 
             print(f"Creating dataset for {model_type=}, {split=}...")
             tic = time.time()
 
-            dataset = BDB2024_Dataset(model_type, feature_df, tgt_df)
+            dataset = BDB2024_Dataset(model_type, feature_df, tgt_df, split=split)
 
             # Save locally with optimized pickle protocol
             with open(local_path, "wb") as f:
