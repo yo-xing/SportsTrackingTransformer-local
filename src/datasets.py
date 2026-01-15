@@ -94,19 +94,38 @@ class BDB2024_Dataset(Dataset):
         n = len(self.keys)
         n_chunks = (n + MAX_KEYS_PER_CHUNK - 1) // MAX_KEYS_PER_CHUNK
 
-        # Check for checkpoint file to resume from
-        checkpoint_path = DATASET_DIR / f".checkpoint_{model_type}_{id(self.keys)}.pkl"
+        # Check for checkpoint file to resume from (try Drive first, then local)
+        checkpoint_filename = f".checkpoint_{model_type}_{id(self.keys)}.pkl"
+        checkpoint_path = DATASET_DIR / checkpoint_filename
+        drive_checkpoint_path = DRIVE_DIR / checkpoint_filename if DRIVE_DIR else None
+
         start_chunk_idx = 0
-        if checkpoint_path.exists():
+
+        # Try loading from Drive first
+        if drive_checkpoint_path and drive_checkpoint_path.exists():
             try:
+                print(f"\nFound checkpoint in Drive, loading...")
+                with open(drive_checkpoint_path, "rb") as f:
+                    checkpoint = pickle.load(f)
+                    self.tgt_arrays = checkpoint["tgt_arrays"]
+                    self.feature_arrays = checkpoint["feature_arrays"]
+                    start_chunk_idx = checkpoint["chunk_idx"] + 1
+                    print(f"Resuming from checkpoint: chunk {start_chunk_idx}/{n_chunks}")
+            except Exception as e:
+                print(f"\nWarning: Could not load checkpoint from Drive: {e}")
+                start_chunk_idx = 0
+        # Fall back to local checkpoint
+        elif checkpoint_path.exists():
+            try:
+                print(f"\nFound local checkpoint, loading...")
                 with open(checkpoint_path, "rb") as f:
                     checkpoint = pickle.load(f)
                     self.tgt_arrays = checkpoint["tgt_arrays"]
                     self.feature_arrays = checkpoint["feature_arrays"]
                     start_chunk_idx = checkpoint["chunk_idx"] + 1
-                    print(f"\nResuming from checkpoint: chunk {start_chunk_idx}/{n_chunks}")
+                    print(f"Resuming from checkpoint: chunk {start_chunk_idx}/{n_chunks}")
             except Exception as e:
-                print(f"\nWarning: Could not load checkpoint: {e}")
+                print(f"\nWarning: Could not load local checkpoint: {e}")
                 start_chunk_idx = 0
 
         with mp.Pool(processes=n_workers) as pool:
@@ -136,13 +155,22 @@ class BDB2024_Dataset(Dataset):
                         pbar.update(1)
 
                 # Save checkpoint after each chunk (allows resume if interrupted)
+                # Save to both local and Drive for redundancy
+                checkpoint_data = {
+                    "chunk_idx": chunk_idx,
+                    "tgt_arrays": self.tgt_arrays,
+                    "feature_arrays": self.feature_arrays,
+                }
                 try:
+                    # Save locally first
                     with open(checkpoint_path, "wb") as f:
-                        pickle.dump({
-                            "chunk_idx": chunk_idx,
-                            "tgt_arrays": self.tgt_arrays,
-                            "feature_arrays": self.feature_arrays,
-                        }, f, protocol=5)
+                        pickle.dump(checkpoint_data, f, protocol=5)
+
+                    # Also save to Drive if available
+                    if drive_checkpoint_path:
+                        drive_checkpoint_path.parent.mkdir(exist_ok=True, parents=True)
+                        with open(drive_checkpoint_path, "wb") as f:
+                            pickle.dump(checkpoint_data, f, protocol=5)
                 except Exception as e:
                     print(f"\nWarning: Could not save checkpoint: {e}")
 
@@ -150,9 +178,11 @@ class BDB2024_Dataset(Dataset):
                 gc.collect()
                 _malloc_trim()
 
-        # Clean up checkpoint file after successful completion
+        # Clean up checkpoint files after successful completion
         if checkpoint_path.exists():
             checkpoint_path.unlink()
+        if drive_checkpoint_path and drive_checkpoint_path.exists():
+            drive_checkpoint_path.unlink()
 
         # Drop big pandas partitions before pickling dataset (reduces RAM spikes + output size)
         self.feature_df_partition = None
