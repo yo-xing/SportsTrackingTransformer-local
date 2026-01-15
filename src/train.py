@@ -191,6 +191,13 @@ def train_model(
     patience=5,
     num_workers=8,
 ):
+    # Reduce batch size for deeper models to avoid OOM during training
+    # L8 models require significantly more memory for gradient computation
+    if num_layers >= 8:
+        original_batch_size = batch_size
+        batch_size = min(batch_size, 512)  # Cap at 512 for L8 models
+        if batch_size != original_batch_size:
+            print(f"  Reducing batch size from {original_batch_size} to {batch_size} for L={num_layers} model")
     """
     Train a single model with specified hyperparameters.
 
