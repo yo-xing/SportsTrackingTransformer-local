@@ -28,7 +28,7 @@ Outputs:
 
 Usage:
     uv run python src/generate_results_summary.py
-    uv run python src/generate_results_summary.py --models-dir models_gamestate --prepped-data-dir data/split_prepped_data_extra_gamestate --num-features 11
+    uv run python src/generate_results_summary.py --models-dir models_gamestate_norm --prepped-data-dir data/split_prepped_data_extra_gamestate_norm --num-features 11
 """
 
 import argparse

@@ -34,8 +34,8 @@ from datasets import BDB2024_Dataset, load_datasets, MIN_YARDS, NUM_YARDS_CLASSE
 from models import LitModel
 
 # Use Google Drive for checkpoints if available (Colab), otherwise local
-GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models")
-LOCAL_MODELS_PATH = Path("models")
+GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models_gamestate_norm")
+LOCAL_MODELS_PATH = Path("models_gamestate_norm")
 
 if GDRIVE_MODELS_PATH.parent.exists():
     MODELS_PATH = GDRIVE_MODELS_PATH

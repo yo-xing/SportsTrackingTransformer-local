@@ -43,6 +43,7 @@ def main():
     parser.add_argument("--sample", type=float, default=None, help="Sample fraction of data (e.g., 0.1 for 10%%)")
     parser.add_argument("--retrain", action="store_true", help="Delete existing model checkpoints before training")
     parser.add_argument("--skip-existing", action="store_true", help="Skip training models that already have checkpoints")
+    parser.add_argument("--use-gamestate-prep", action="store_true", help="Use prep data from add-game-state-features branch")
     args = parser.parse_args()
 
     force_flag = "--force" if args.force else ""
@@ -51,15 +52,25 @@ def main():
 
     print("\n" + "="*60)
     print("Transformer-Only Training Pipeline")
+    print("Branch: game-state-norm")
+    print("Features: 11 (6 player + 5 game state)")
+    print("Entities: 23 (22 players + 1 football)")
     print("="*60 + "\n")
 
-    # Use separate cache directories for game state feature training
-    # This prevents overwriting existing caches
-    drive_cache_prep = "/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate"
-    drive_cache_datasets = "/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate"
-    local_output_prep = "data/split_prepped_data_extra_gamestate"
-    local_output_datasets = "data/datasets_extra_gamestate"
-    local_output_models = "models_gamestate"
+    # Use separate cache directories for game-state-norm branch
+    # This prevents overwriting existing caches from other branches
+    if args.use_gamestate_prep:
+        # Use prep cache from add-game-state-features branch (11 features, 23 entities)
+        drive_cache_prep = "/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_23"
+        print("📦 Using prep data from add-game-state-features branch\n")
+    else:
+        # Use dedicated prep cache for game-state-norm branch
+        drive_cache_prep = "/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm"
+
+    drive_cache_datasets = "/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate_norm"
+    local_output_prep = "data/split_prepped_data_extra_gamestate_norm"
+    local_output_datasets = "data/datasets_extra_gamestate_norm"
+    local_output_models = "models_gamestate_norm"
 
     # If force flag is set, delete cache directories to force regeneration
     if args.force:
@@ -102,7 +113,7 @@ def main():
         print("\n✓ Model checkpoints deleted\n")
 
     # Stage 1: Prepare extra data (with all 18 weeks)
-    if not args.skip_prep:
+    if not args.skip_prep and not args.use_gamestate_prep:
         # Use all 18 weeks for full dataset training
         all_weeks = " ".join([f"{i:02d}" for i in range(1, 19)])
         sample_desc = f" ({args.sample*100:.0f}% sample)" if args.sample else ""
@@ -111,6 +122,8 @@ def main():
             f"--output-dir {local_output_prep} --drive-dir {drive_cache_prep} {sample_flag}",
             f"Stage 1/3: Preparing extra data (18 weeks{sample_desc})"
         )
+    elif args.use_gamestate_prep:
+        print("\n⏭️  Skipping data preparation - using prep data from add-game-state-features branch\n")
     else:
         print("\n⏭️  Skipping data preparation stage\n")
 
@@ -145,7 +158,7 @@ def main():
         print("\n⏭️  Skipping training stage (using existing checkpoints)\n")
 
     # Stage 4: Models are already in Google Drive (no backup needed)
-    drive_models_dir = "/content/drive/MyDrive/SportsTrackingTransformer/models_gamestate"
+    drive_models_dir = "/content/drive/MyDrive/SportsTrackingTransformer/models_gamestate_norm"
     from pathlib import Path
     if Path("/content/drive/MyDrive").exists():
         print("\n" + "="*60)

@@ -25,8 +25,8 @@ from pathlib import Path
 import polars as pl
 
 INPUT_DATA_DIR = Path("/content/drive/MyDrive/NGS/NFL/REG/")
-OUTPUT_DATA_DIR = Path("data/split_prepped_data_extra_gamestate_23/")
-DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_23") # Google Drive directory for caching (optional)
+OUTPUT_DATA_DIR = Path("data/split_prepped_data_extra_gamestate_norm/")
+DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm") # Google Drive directory for caching (optional)
 
 # Weeks to read
 WEEKS_TO_READ = ["06", "07"]
