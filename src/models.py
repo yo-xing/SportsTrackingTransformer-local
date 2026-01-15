@@ -91,6 +91,9 @@ class SportsTransformer(nn.Module):
             num_layers=num_layers,
         )
 
+        # Normalization layer after transformer encoder
+        self.encoder_norm = nn.LayerNorm(model_dim)
+
         # Pool across player dimension
         # We pool because this task is a single value across all players, you don't need to pool for all tasks.
         self.player_pooling_layer = nn.AdaptiveAvgPool1d(1)
@@ -128,6 +131,9 @@ class SportsTransformer(nn.Module):
 
         # Apply transformer encoder
         x = self.transformer_encoder(x)  # [B,P,M] -> [B,P,M]
+
+        # Apply normalization after transformer encoder
+        x = self.encoder_norm(x)  # [B,P,M] -> [B,P,M]
 
         # Pool over player dimension
         x = squeeze(self.player_pooling_layer(x.permute(0, 2, 1)), -1)  # [B,M,P] -> [B,M]

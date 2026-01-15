@@ -35,11 +35,11 @@ def check_and_sync_files():
     """
     # Google Drive paths
     INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate")
-    OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat")
+    OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_norm")
 
     # Local paths
     INPUT_DIR = Path("data/datasets_extra_gamestate_23")
-    OUTPUT_DIR = Path("data/datasets_extra")
+    OUTPUT_DIR = Path("data/datasets_extra_norm")
 
     splits = ["train", "val", "test"]
     model_type = "transformer"
