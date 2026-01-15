@@ -24,13 +24,13 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 # Indices to keep from the original 11 features
 KEEP_INDICES = [0, 1, 2, 3, 4, 5, 8]  # x_rel, y_rel, vx, vy, side, is_ball_carrier, distanceToGoal
 
-# Input: 11-feature datasets from add-game-state-features branch
+# Input: 11-feature datasets from game-state-norms branch
 INPUT_DIR = Path("data/datasets_extra_gamestate_23/")
-INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate")
+INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate_norm")
 
-# Output: 7-feature datasets for 23-entity branch
-OUTPUT_DIR = Path("data/datasets_extra/")
-OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat")
+# Output: 7-feature datasets for 23-entity-norm branch
+OUTPUT_DIR = Path("data/datasets_extra_norm/")
+OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_norm")
 
 
 class _DatasetUnpickler(pickle.Unpickler):

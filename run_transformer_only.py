@@ -34,12 +34,12 @@ def check_and_sync_files():
     Returns tuple of (source_files_exist, filtered_files_exist)
     """
     # Google Drive paths
-    INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate")
-    OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat")
+    INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate_norm")
+    OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_norm")
 
     # Local paths
     INPUT_DIR = Path("data/datasets_extra_gamestate_23")
-    OUTPUT_DIR = Path("data/datasets_extra")
+    OUTPUT_DIR = Path("data/datasets_extra_norm")
 
     splits = ["train", "val", "test"]
     model_type = "transformer"
@@ -130,7 +130,7 @@ def check_and_sync_files():
 
     # Check target files (needed by dataset loading)
     TARGET_DIR = Path("data/split_prepped_data_extra")
-    TARGET_DRIVE_DIR = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate")
+    TARGET_DRIVE_DIR = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm")
 
     targets_exist = True
     targets_local_count = 0
@@ -231,7 +231,7 @@ def main():
         print("❌ Error: Target files not found")
         print("   Cannot proceed without target files")
         print("   Please ensure target files are available on Google Drive at:")
-        print("   /content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate/")
+        print("   /content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm/")
         sys.exit(1)
 
     # Determine if we can skip filtering
@@ -241,7 +241,7 @@ def main():
         print("❌ Error: Source datasets (11 features) not found")
         print("   Cannot proceed with filtering step")
         print("   Please ensure datasets are available on Google Drive at:")
-        print("   /content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate/transformer/")
+        print("   /content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate_norm/transformer/")
         sys.exit(1)
 
     # Step 1: Filter datasets from 11 features to 7 features
@@ -256,7 +256,7 @@ def main():
     # Step 2: Train transformer model
     if not args.skip_training:
         # Verify filtered datasets exist before training
-        OUTPUT_DIR = Path("data/datasets_extra")
+        OUTPUT_DIR = Path("data/datasets_extra_norm")
         required_files = [
             OUTPUT_DIR / "transformer" / f"{split}_dataset.pkl"
             for split in ["train", "val", "test"]

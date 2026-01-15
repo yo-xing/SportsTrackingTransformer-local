@@ -26,8 +26,8 @@ random.seed(42)
 
 # Default directories (can be overridden via CLI)
 PREPPED_DATA_DIR = Path("data/split_prepped_data_extra/")
-DATASET_DIR = Path("data/datasets_extra/")
-DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat") # Google Drive directory for caching (optional)
+DATASET_DIR = Path("data/datasets_extra_norm/")
+DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_norm") # Google Drive directory for caching (optional)
 
 # Yards gained classification constants
 # Class 0 = -10 yards, Class 109 = +99 yards
