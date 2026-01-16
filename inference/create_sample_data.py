@@ -16,7 +16,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.prep_extra_data import (
-    load_extra_data,
     map_column_names,
     filter_tracking_data,
     identify_ball_carrier,
@@ -24,8 +23,7 @@ from src.prep_extra_data import (
     determine_play_direction,
     standardize_tracking_directions,
     add_relative_positions,
-    get_yards_gained_target_df,
-    save_features_and_targets
+    get_yards_gained_target_df
 )
 import polars as pl
 
@@ -80,7 +78,7 @@ def process_sample_data(sample_data_dir: Path, output_dir: Path):
     df = add_relative_positions(df)
 
     print("Creating target labels...")
-    targets_df = get_yards_gained_target_df(df)
+    df, targets_df = get_yards_gained_target_df(df)
 
     # Create train/val/test splits (70/15/15)
     print("\nCreating train/val/test splits...")
