@@ -360,6 +360,42 @@
 
     <p><strong>Observation</strong>: The model achieves its best accuracy at the tackle event (3.79 yards), when both player positions and football location converge to the final outcome point.</p>
 
+    <h3>Example Play Visualizations</h3>
+    <p>To better understand how the model performs on individual plays, we present two example visualizations showing frame-by-frame player tracking, football trajectory, and yard predictions:</p>
+
+    <div class="highlight-box">
+        <p><strong>High Accuracy Play: Game 58517, Play 3375 (MAE: 0.49 yards)</strong></p>
+        <p>This interactive visualization shows a play where the model achieved exceptional accuracy—predicting within half a yard of the actual outcome. The visualization displays:</p>
+        <ul>
+            <li>Player positions (offense in red, defense in blue) at each frame</li>
+            <li>Football trajectory throughout the play (yellow markers)</li>
+            <li>Ball carrier identification and movement</li>
+            <li>Frame-by-frame prediction evolution</li>
+        </ul>
+        <p><a href="visualizations/pass_game58517_play3375_mae0.49.html" target="_blank"><strong>→ View Interactive Visualization</strong></a></p>
+        <p><em>Note: Opens in new tab. Use playback controls to see how predictions evolve as the play unfolds.</em></p>
+    </div>
+
+    <div class="highlight-box">
+        <p><strong>Moderate Accuracy Play: Game 58517, Play 2243 (MAE: 1.45 yards)</strong></p>
+        <p>This interactive visualization shows a play with moderate prediction accuracy. Even with a 1.45-yard error (less than 5 feet), the model correctly identified the general outcome region. The visualization displays:</p>
+        <ul>
+            <li>Player positions (offense in red, defense in blue) at each frame</li>
+            <li>Football trajectory throughout the play (yellow markers)</li>
+            <li>Ball carrier identification and movement</li>
+            <li>Frame-by-frame prediction evolution</li>
+        </ul>
+        <p><a href="visualizations/pass_game58517_play2243_mae1.45.html" target="_blank"><strong>→ View Interactive Visualization</strong></a></p>
+        <p><em>Note: Opens in new tab. Use playback controls to see how predictions evolve as the play unfolds.</em></p>
+        <p><strong>Key observations from these examples:</strong></p>
+        <ul>
+            <li>The model tracks both player convergence patterns and football trajectory simultaneously</li>
+            <li>Early-play predictions show higher uncertainty, converging to more accurate predictions as players close in</li>
+            <li>Even "moderate" accuracy (1.45 yards) is within 5 feet—sufficient for meaningful analysis</li>
+            <li>The 23-entity approach (22 players + football) allows the attention mechanism to weight football position appropriately for different play types</li>
+        </ul>
+    </div>
+
     <hr>
 
     <h2>Why Football Tracking + Minimal Features Works</h2>

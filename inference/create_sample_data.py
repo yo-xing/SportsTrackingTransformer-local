@@ -92,6 +92,14 @@ def process_sample_data(sample_data_dir: Path, output_dir: Path):
     print("Creating target labels...")
     df, targets_df = get_yards_gained_target_df(df)
 
+    # Debug: Check if nflId column exists
+    print(f"\nTotal columns after preprocessing: {len(df.columns)}")
+    print(f"All columns: {df.columns}")
+    if "nflId" not in df.columns:
+        print("❌ WARNING: nflId column is missing!")
+    else:
+        print("✓ nflId column present")
+
     # Create train/val/test splits (70/15/15)
     print("\nCreating train/val/test splits...")
     unique_plays = df.select(["gameId", "playId"]).unique()
