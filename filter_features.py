@@ -28,9 +28,9 @@ KEEP_INDICES = [0, 1, 2, 3, 4, 5, 8]  # x_rel, y_rel, vx, vy, side, is_ball_carr
 INPUT_DIR = Path("data/datasets_extra_gamestate_23/")
 INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate_norm")
 
-# Output: 7-feature datasets for 23-entity-norm branch
-OUTPUT_DIR = Path("data/datasets_extra_norm/")
-OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_norm")
+# Output: 7-feature datasets for 23-entity-football branch
+OUTPUT_DIR = Path("data/datasets_extra_norm_football/")
+OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_norm_football")
 
 
 class _DatasetUnpickler(pickle.Unpickler):
@@ -88,8 +88,8 @@ def filter_dataset(input_path: Path, output_path: Path, model_type: str):
         # Filter the feature arrays in the dataset
         for key in tqdm(dataset.feature_arrays.keys(), desc="Filtering features"):
             original_array = dataset.feature_arrays[key]
-            # original_array shape: (22, 11) for 22 players, 11 features
-            # new shape should be: (22, 7)
+            # original_array shape: (23, 11) for 23 entities (22 players + football), 11 features
+            # new shape should be: (23, 7)
             filtered_array = original_array[:, KEEP_INDICES]
             dataset.feature_arrays[key] = filtered_array
 

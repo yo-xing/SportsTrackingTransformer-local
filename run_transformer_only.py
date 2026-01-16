@@ -35,11 +35,11 @@ def check_and_sync_files():
     """
     # Google Drive paths
     INPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_gamestate_norm")
-    OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_norm")
+    OUTPUT_DRIVE_DIR = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_norm_football")
 
     # Local paths
     INPUT_DIR = Path("data/datasets_extra_gamestate_23")
-    OUTPUT_DIR = Path("data/datasets_extra_norm")
+    OUTPUT_DIR = Path("data/datasets_extra_norm_football")
 
     splits = ["train", "val", "test"]
     model_type = "transformer"
@@ -130,7 +130,7 @@ def check_and_sync_files():
 
     # Check target files (needed by dataset loading)
     TARGET_DIR = Path("data/split_prepped_data_extra")
-    TARGET_DRIVE_DIR = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm")
+    TARGET_DRIVE_DIR = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm_football")
 
     targets_exist = True
     targets_local_count = 0
@@ -214,8 +214,9 @@ def main():
     skip_filter = args.skip_filter or args.skip_precompute
 
     print("\n" + "="*60)
-    print("23-Entity Transformer Training Pipeline")
-    print("Features: 7 (6 player + 1 game state)")
+    print("23-Entity (with Football) Transformer Training Pipeline")
+    print("Features: 7 (6 entity + 1 game state)")
+    print("Entities: 22 players + 1 football")
     print("Game State: distanceToGoal only")
     if args.sample:
         print(f"Note: --sample {args.sample} flag ignored (datasets are pre-filtered)")

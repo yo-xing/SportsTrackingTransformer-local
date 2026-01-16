@@ -30,7 +30,7 @@ torch.set_float32_matmul_precision("medium")
 
 class SportsTransformer(nn.Module):
     """
-    Transformer model that treats all 22 players as a sequence for yards gained prediction.
+    Transformer model that treats all 23 entities (22 players + football) as a sequence for yards gained prediction.
     Outputs a probability distribution over yards gained (-10 to +99).
     """
 
@@ -313,7 +313,7 @@ class LitModel(LightningModule):
             dropout=dropout,
         )
         self.example_input_array = (
-            torch.randn((batch_size, 22, self.feature_len))
+            torch.randn((batch_size, 23, self.feature_len))
             if self.model_type == "transformer"
             else torch.randn((batch_size, 10, 11, self.feature_len))
         )

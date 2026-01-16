@@ -26,8 +26,8 @@ random.seed(42)
 
 # Default directories (can be overridden via CLI)
 PREPPED_DATA_DIR = Path("data/split_prepped_data_extra/")
-DATASET_DIR = Path("data/datasets_extra_norm/")
-DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_norm") # Google Drive directory for caching (optional)
+DATASET_DIR = Path("data/datasets_extra_norm_football/")
+DRIVE_DIR: Path | None = Path("/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_norm_football") # Google Drive directory for caching (optional)
 
 # Yards gained classification constants
 # Class 0 = -10 yards, Class 109 = +99 yards
@@ -162,7 +162,7 @@ class BDB2024_Dataset(Dataset):
         # Player-specific features (6) + Game state feature (1: distanceToGoal) = 7 total
         features = ["x_rel", "y_rel", "vx", "vy", "side", "is_ball_carrier", "distanceToGoal"]
         x = frame_df[features].to_numpy(dtype=np.float32)
-        assert x.shape == (22, len(features)), f"Expected shape (22, {len(features)}), got {x.shape}"
+        assert x.shape == (23, len(features)), f"Expected shape (23, {len(features)}), got {x.shape}"
         return x
 
     def zoo_transform_input_frame_df(self, frame_df: pd.DataFrame) -> np.ndarray:
