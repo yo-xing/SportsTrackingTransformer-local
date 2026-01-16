@@ -20,7 +20,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # Paths (adjust for your environment)
 MODELS_DIR = Path('/content/drive/MyDrive/SportsTrackingTransformer/models_norm_football')
 NGS_DATA_DIR = Path('/content/drive/MyDrive/NGS/NFL/REG/')
-PREPPED_DATA_PATH = Path('/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_football')
+PREPPED_DATA_PATH = Path('/content/drive/MyDrive/SportsTrackingTransformer_cache_football')
 
 PLAY_TYPES = ['play_type_pass', 'play_type_rush', 'play_type_sack']
 MIN_YARDS = -10
