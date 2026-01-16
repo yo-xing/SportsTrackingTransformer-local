@@ -162,8 +162,35 @@ def main():
         print("✓ Preprocessed data already exists")
         print()
 
-    # Step 4: Filter features (11 features → 7 features)
-    print("[4/6] Filtering features...")
+    # Step 4: Precompute datasets (convert parquet → pkl with 11 features)
+    print("[4/7] Precomputing datasets...")
+
+    # Check if precomputed datasets exist (11 features)
+    precomputed_data_dir = Path("data/datasets_extra_gamestate_23/transformer")
+    precomputed_required = [
+        precomputed_data_dir / "train_dataset.pkl",
+        precomputed_data_dir / "val_dataset.pkl",
+        precomputed_data_dir / "test_dataset.pkl",
+    ]
+
+    missing_precomputed = [f for f in precomputed_required if not f.exists()]
+
+    if missing_precomputed:
+        print("   Precomputed datasets not found. Running datasets.py...")
+        repo_root = INFERENCE_DIR.parent
+        run_command(
+            f"cd {repo_root} && {python_cmd} src/datasets.py "
+            f"--prepped-data-dir data/split_prepped_data_extra "
+            f"--dataset-dir data/datasets_extra_gamestate_23 "
+            f"--model-types transformer",
+            "Step 4a: Precomputing datasets (parquet → pkl, 11 features)"
+        )
+    else:
+        print("✓ Precomputed datasets already exist")
+        print()
+
+    # Step 5: Filter features (11 features → 7 features)
+    print("[5/7] Filtering features...")
 
     # Check if filtered datasets exist
     filtered_data_dir = Path("data/datasets_extra_norm_football/transformer")
@@ -181,14 +208,14 @@ def main():
         repo_root = INFERENCE_DIR.parent
         run_command(
             f"cd {repo_root} && {python_cmd} filter_features.py",
-            "Step 4a: Filtering datasets (11 features → 7 features)"
+            "Step 5a: Filtering datasets (11 features → 7 features)"
         )
     else:
         print("✓ Filtered datasets already exist")
         print()
 
-    # Step 5: Prepare for inference
-    print("[5/6] Setting up inference...")
+    # Step 6: Prepare for inference
+    print("[6/7] Setting up inference...")
 
     # Create predictions output directory
     PREDICTIONS_DIR.mkdir(exist_ok=True, parents=True)
@@ -204,8 +231,8 @@ def main():
         print(f"   Copying checkpoint to temporary location...")
         shutil.copy2(checkpoint_path, temp_checkpoint)
 
-    # Step 6: Run inference using generate_results_summary.py
-    print("[6/6] Running inference...")
+    # Step 7: Run inference using generate_results_summary.py
+    print("[7/7] Running inference...")
 
     # Need to run from repository root, not inference/
     repo_root = INFERENCE_DIR.parent
