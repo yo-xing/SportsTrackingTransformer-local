@@ -204,10 +204,15 @@ def main():
     parser.add_argument("--device", type=int, default=0, help="GPU device to use (default: 0)")
     parser.add_argument("--patience", type=int, default=10, help="Early stopping patience (default: 10)")
     parser.add_argument("--use-uv", action="store_true", help="Use uv run for subprocess commands")
+    parser.add_argument(
+        "--model-dims", type=int, nargs="+", default=None,
+        help="Filter by model dimensions (e.g., --model-dims 64 or --model-dims 32 128)"
+    )
     args = parser.parse_args()
 
     skip_existing_flag = "--skip-existing" if args.skip_existing else ""
     skip_if_trained_flag = f"--skip-if-trained --min-epochs {args.min_epochs}" if args.skip_if_trained else ""
+    model_dims_flag = f"--model-dims {' '.join(map(str, args.model_dims))}" if args.model_dims else ""
     python_cmd = "uv run python" if args.use_uv else "python"
 
     # --skip-precompute is an alias for --skip-filter
@@ -271,7 +276,7 @@ def main():
             sys.exit(1)
 
         run_command(
-            f"{python_cmd} src/train.py --model_type transformer --device {args.device} --patience {args.patience} {skip_existing_flag} {skip_if_trained_flag}",
+            f"{python_cmd} src/train.py --model_type transformer --device {args.device} --patience {args.patience} {skip_existing_flag} {skip_if_trained_flag} {model_dims_flag}",
             "Step 2: Training transformer model"
         )
     else:
