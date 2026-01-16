@@ -1,7 +1,7 @@
 """
 Join model predictions with NGS tracking data.
 Loads predictions from best model and joins with one week of NGS data.
-Saves enriched data with predictions to parquet file.
+Saves enriched data with predictions to CSV file.
 """
 
 import re
@@ -11,7 +11,7 @@ import polars as pl
 # Configuration
 MODELS_DIR = Path('/content/drive/MyDrive/SportsTrackingTransformer/models_norm_football')
 NGS_DATA_DIR = Path('/content/drive/MyDrive/NGS/NFL/REG/')
-OUTPUT_FILE = Path('./predictions_with_ngs_data.parquet')
+OUTPUT_FILE = Path('./predictions_with_ngs_data.csv')
 
 MIN_YARDS = -10
 
@@ -139,7 +139,7 @@ if 'expected_yards' in joined.columns and 'true_yards' in joined.columns:
     ])
 
 print("\nStep 5: Saving enriched data...")
-joined.write_parquet(OUTPUT_FILE)
+joined.write_csv(OUTPUT_FILE)
 print(f"✓ Saved to: {OUTPUT_FILE}")
 
 print("\n" + "="*80)
