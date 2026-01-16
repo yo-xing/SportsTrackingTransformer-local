@@ -130,7 +130,7 @@ def check_and_sync_files():
 
     # Check target files (needed by dataset loading)
     TARGET_DIR = Path("data/split_prepped_data_extra")
-    TARGET_DRIVE_DIR = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm_football")
+    TARGET_DRIVE_DIR = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm")
 
     targets_exist = True
     targets_local_count = 0
