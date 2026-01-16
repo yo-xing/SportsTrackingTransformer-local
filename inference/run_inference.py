@@ -6,15 +6,18 @@ This script runs the complete inference pipeline on sample data.
 Based on run_transformer_only.py but simplified for inference only.
 
 Usage:
-    python run_inference.py [--model-checkpoint PATH] [--use-uv]
+    python run_inference.py [--model-checkpoint PATH] [--data-file PATH] [--use-uv]
 
 The script will:
 1. Check for model checkpoint in inference/model/
-2. Check for sample data in inference/sample_data/Week 01/
-3. Run data preprocessing (src/prep_extra_data.py) if needed
+2. Check for sample data in inference/sample_data/Week 01/ (or custom --data-file)
+3. Run data preprocessing (create_sample_data.py) if needed
 4. Filter features to 7 (filter_features.py) if needed
 5. Run inference (src/generate_results_summary.py)
 6. Save predictions to inference/predictions/
+
+By default, the script processes only the sample data in inference/sample_data/.
+Use --data-file to specify a custom parquet file to process instead.
 
 The preprocessing steps are run automatically if the required data files
 don't exist yet. Once data is preprocessed, subsequent runs will skip
@@ -96,6 +99,8 @@ def main():
     parser = ArgumentParser(description="Run inference on sample data")
     parser.add_argument("--model-checkpoint", type=str, default=None,
                        help="Path to model checkpoint (default: auto-detect in inference/model/)")
+    parser.add_argument("--data-file", type=str, default=None,
+                       help="Path to specific parquet file (default: use inference/sample_data/Week 01/)")
     parser.add_argument("--use-uv", action="store_true",
                        help="Use uv run for subprocess commands")
     args = parser.parse_args()
@@ -145,12 +150,13 @@ def main():
     missing_files = [f for f in required_files if not f.exists()]
 
     if missing_files:
-        print("   Preprocessed data not found. Running prep_extra_data.py...")
-        # Need to run from repository root, not inference/
+        print("   Preprocessed data not found. Running create_sample_data.py...")
+        # Run inference-specific preprocessing (processes only sample_data/)
         repo_root = INFERENCE_DIR.parent
+        data_file_arg = f" --data-file {args.data_file}" if args.data_file else ""
         run_command(
-            f"cd {repo_root} && {python_cmd} src/prep_extra_data.py",
-            "Step 3a: Preprocessing raw data (Axially → BDB 2024 format)"
+            f"cd {repo_root} && {python_cmd} inference/create_sample_data.py{data_file_arg}",
+            "Step 3a: Preprocessing sample data (Axially → BDB 2024 format)"
         )
     else:
         print("✓ Preprocessed data already exists")
