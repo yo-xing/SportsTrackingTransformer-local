@@ -84,26 +84,23 @@ test_df = results_df.filter(
 )
 print(f"✓ Test set (non-mirrored): {len(test_df):,} predictions")
 
-print("\nStep 3: Loading NGS data (Week 1 only)...")
-# Load just one week of NGS data
-week_dirs = sorted([d for d in NGS_DATA_DIR.glob("Week*") if d.is_dir()])
-if not week_dirs:
-    print("❌ No week directories found!")
+print("\nStep 3: Loading NGS data (single file sample)...")
+# Load just one parquet file as a sample
+all_parquet_files = []
+for week_dir in NGS_DATA_DIR.glob("Week*"):
+    if week_dir.is_dir():
+        all_parquet_files.extend([f for f in week_dir.glob("*.parquet") if "_mirror" not in f.name])
+
+if not all_parquet_files:
+    print("❌ No parquet files found!")
     exit(1)
 
-week_1_dir = week_dirs[0]
-print(f"Loading from: {week_1_dir.name}")
+# Use the first parquet file as sample
+sample_file = all_parquet_files[0]
+print(f"Loading single file: {sample_file.parent.name}/{sample_file.name}")
 
-parquet_files = [f for f in week_1_dir.glob("*.parquet") if "_mirror" not in f.name]
-print(f"Found {len(parquet_files)} parquet files")
-
-ngs_dfs = []
-for i, f in enumerate(parquet_files[:5]):  # Load first 5 files for demo
-    print(f"  Loading file {i+1}/5: {f.name}")
-    ngs_dfs.append(pl.read_parquet(f))
-
-ngs_df = pl.concat(ngs_dfs, how="vertical_relaxed")
-print(f"✓ Loaded {len(ngs_df):,} NGS tracking records")
+ngs_df = pl.read_parquet(sample_file)
+print(f"✓ Loaded {len(ngs_df):,} NGS tracking records from single file")
 
 # Normalize column names
 rename_map = {'gamekey': 'gameId', 'playid': 'playId', 'frame_id': 'frameId'}
