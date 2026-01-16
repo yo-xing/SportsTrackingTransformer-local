@@ -152,7 +152,7 @@ def main():
             f"--prepped-data-dir {local_output_prep} "
             f"--dataset-dir {local_output_datasets} --models-dir {local_output_models} "
             f"--batch-size 1024 --num-workers {num_workers} {skip_existing_flag}",  # Increased batch size for A100
-            "Stage 3/5: Training transformer models"
+            "Stage 3/6: Training transformer models"
         )
     else:
         print("\n⏭️  Skipping training stage (using existing checkpoints)\n")
@@ -162,20 +162,28 @@ def main():
     from pathlib import Path
     if Path("/content/drive/MyDrive").exists():
         print("\n" + "="*60)
-        print("Stage 4/5: Models saved to Google Drive")
+        print("Stage 4/6: Models saved to Google Drive")
         print("="*60 + "\n")
         print(f"✓ Models are already in Google Drive: {drive_models_dir}/transformer/\n")
     else:
         print("\nGoogle Drive not mounted\n")
 
-    # Stage 5: Generate results summary (use Drive path since models are there)
+    # Stage 5: Pick best model from grid search based on validation loss
     models_path = drive_models_dir if Path(drive_models_dir).exists() else local_output_models
+    run_command(
+        f"uv run python src/pick_best_models.py "
+        f"--models-dir {models_path} "
+        f"--model-types transformer",
+        "Stage 5/6: Picking best model from grid search"
+    )
+
+    # Stage 6: Generate results summary (use Drive path since models are there)
     run_command(
         f"uv run python src/generate_results_summary.py "
         f"--models-dir {models_path} "
         f"--prepped-data-dir {local_output_prep} "
         f"--num-features 11",
-        "Stage 5/5: Generating results summary"
+        "Stage 6/6: Generating results summary"
     )
 
     print("\n" + "="*60)

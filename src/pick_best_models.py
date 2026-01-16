@@ -88,15 +88,24 @@ def main(args):
     This function finds the best checkpoints for each model type, copies them
     to a designated directory, and renames them for consistency.
     """
-    # Set up directories - use MODELS_PATH which handles Colab/local automatically
-    root_dir = MODELS_PATH
-    out_root_dir = MODELS_PATH / "best_models"
+    # Set up directories - use command line arg if provided, otherwise use MODELS_PATH
+    root_dir = Path(args.models_dir) if args.models_dir else MODELS_PATH
+    out_root_dir = root_dir / "best_models"
+
+    # Filter by model types if specified
+    model_types = args.model_types if hasattr(args, 'model_types') and args.model_types else None
 
     # Find best checkpoints
     best_checkpoints = find_best_checkpoint(root_dir)
 
     # Process each best checkpoint
     for model_name, checkpoint_path in best_checkpoints.items():
+        # Skip if model type filter is specified and this model doesn't match
+        if model_types:
+            # Check if model_name contains any of the specified model types
+            if not any(model_type in model_name for model_type in model_types):
+                continue
+
         print(f"Best checkpoint for {model_name}: {checkpoint_path}")
 
         # Create output directory
@@ -122,6 +131,18 @@ def main(args):
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Select and copy the best performing models.")
-    # Add any command-line arguments if needed
+    parser.add_argument(
+        "--models-dir",
+        type=str,
+        default=None,
+        help="Models directory (default: uses MODELS_PATH based on environment)"
+    )
+    parser.add_argument(
+        "--model-types",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Model types to process (e.g., transformer zoo). If not specified, processes all."
+    )
     args = parser.parse_args()
     main(args)
