@@ -33,14 +33,22 @@ def process_sample_data(sample_data_dir: Path, output_dir: Path):
 
     print(f"\nProcessing sample data from: {sample_data_dir}")
 
-    # Load only the sample parquet file(s)
-    parquet_files = list(sample_data_dir.glob("**/*.parquet"))
+    # Load only the RAW sample parquet file(s) from Week 01
+    # Exclude already-processed files (inference_features.parquet, inference_targets.parquet)
+    week_dir = sample_data_dir / "Week 01"
+    if week_dir.exists():
+        parquet_files = [f for f in week_dir.glob("*.parquet")
+                        if not f.name.startswith("inference_")]
+    else:
+        parquet_files = [f for f in sample_data_dir.glob("*.parquet")
+                        if not f.name.startswith("inference_")]
 
     if not parquet_files:
-        print(f"❌ Error: No parquet files found in {sample_data_dir}")
+        print(f"❌ Error: No raw parquet files found in {sample_data_dir}")
+        print(f"   Looking for files in: {sample_data_dir / 'Week 01'}")
         sys.exit(1)
 
-    print(f"Found {len(parquet_files)} parquet file(s):")
+    print(f"Found {len(parquet_files)} raw parquet file(s):")
     for f in parquet_files:
         size_mb = f.stat().st_size / (1024 * 1024)
         print(f"  - {f.name} ({size_mb:.1f} MB)")
