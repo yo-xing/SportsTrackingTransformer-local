@@ -532,14 +532,15 @@ else:
 print(f"✓ Joined: {len(joined):,} predictions with metadata")
 
 print("\nStep 5: Computing MAE per play...")
-# Compute MAE for each play
+# Note: results already contain 'expected_yards' (weighted average from softmax)
+# Just need to add true_yards from the class labels
 joined = joined.with_columns([
-    (pl.col('yards_gained_class') + MIN_YARDS).alias('true_yards'),
-    (pl.col('predicted_class') + MIN_YARDS).alias('pred_yards')
+    (pl.col('yards_gained_class') + MIN_YARDS).alias('true_yards')
 ])
 
+# Compute absolute error using the expected_yards (weighted average) from results
 joined = joined.with_columns(
-    (pl.col('true_yards') - pl.col('pred_yards')).abs().alias('abs_error')
+    (pl.col('true_yards') - pl.col('expected_yards')).abs().alias('abs_error')
 )
 
 # Get play-level MAE (average across all frames in the play)
@@ -591,10 +592,8 @@ if not tracking_path.exists():
 tracking_df = pl.read_parquet(tracking_path)
 print(f"✓ Loaded tracking data: {len(tracking_df):,} frames")
 
-# Add expected_yards column to joined data for visualization
-joined = joined.with_columns(pl.col('pred_yards').alias('expected_yards'))
-
-# Also add yards_gained column (needed by visualize_play_v3)
+# Add yards_gained column (needed by visualize_play_v3)
+# Note: 'expected_yards' already exists in results (weighted average from softmax)
 joined = joined.with_columns(pl.col('true_yards').alias('yards_gained'))
 
 print("\nStep 8: Creating visualizations (HTML animations + PNG graphs)...")
