@@ -366,7 +366,8 @@ def visualize_play_v3(test_results: pl.DataFrame, game_id: int, play_id: int, ou
 
     play_data = test_results.filter(
         (pl.col("gameId") == game_id) &
-        (pl.col("playId") == play_id)
+        (pl.col("playId") == play_id) &
+        (pl.col("mirrored") == False)  # Only use original play, not mirrored
     ).sort("frameId")
 
     if len(play_data) == 0:
