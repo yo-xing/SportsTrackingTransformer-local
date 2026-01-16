@@ -150,30 +150,261 @@ def preprocess_raw_data():
     """
     Preprocess raw Axially-format data from sample_data/Week 01/
 
-    This is a simplified version of prep_extra_data.py that works with local paths only.
-    For full preprocessing pipeline, see src/prep_extra_data.py
+    This implements the preprocessing pipeline from src/prep_extra_data.py
+    adapted to work with local paths only (no Google Drive dependencies).
 
     Returns:
         bool: True if preprocessing succeeded, False otherwise
     """
-    print("\n" + "="*60)
-    print("WARNING: Raw data preprocessing not yet implemented!")
-    print("="*60)
-    print("\nTo use this inference script, you need preprocessed data in one of these formats:")
-    print("\n1. Preprocessed sample files (recommended):")
-    print("   - inference/sample_data/train_features_sample.parquet")
-    print("   - inference/sample_data/train_targets_sample.parquet")
-    print("   - (same for val and test)")
-    print("\n2. Full preprocessed files:")
-    print("   - data/split_prepped_data_extra/train_features.parquet")
-    print("   - data/split_prepped_data_extra/train_targets.parquet")
-    print("   - (same for val and test)")
-    print("\nTo create preprocessed data from raw files:")
-    print("   python src/prep_extra_data.py")
-    print("\nThen copy the sample files to inference/sample_data/")
-    print()
+    print("\nPreprocessing raw Axially-format data...")
+    print("This may take a few minutes...")
 
-    return False
+    try:
+        # Step 1: Load raw data
+        print("\n[1/11] Loading raw data...")
+        raw_data_dir = SAMPLE_DATA_DIR / "Week 01"
+        parquet_files = list(raw_data_dir.glob("*.parquet"))
+
+        if not parquet_files:
+            print(f"ERROR: No parquet files found in {raw_data_dir}")
+            return False
+
+        print(f"Found {len(parquet_files)} files")
+        dfs = []
+        for f in parquet_files:
+            df = pl.read_parquet(f)
+            dfs.append(df)
+
+        df = pl.concat(dfs, how="vertical_relaxed")
+        print(f"Loaded {len(df)} rows")
+
+        # Step 2: Map column names
+        print("\n[2/11] Mapping column names (snake_case → camelCase)...")
+        df = df.rename({
+            "gamekey": "gameId",
+            "playid": "playId",
+            "nfl_id": "nflId",
+            "frame_id": "frameId",
+            "display_name": "displayName",
+            "team_abbr": "club",
+            "yards_to_go": "yardsToGo",
+            "yards_gained": "prePenaltyPlayResult",
+            "vel_x": "vx",
+            "vel_y": "vy",
+            "vel": "s",
+            "roster_position": "position",
+        })
+        print("Column names mapped")
+
+        # Step 3: Filter tracking data
+        print("\n[3/11] Filtering tracking data...")
+        og_len = len(df)
+        # Remove football rows
+        df = df.filter(pl.col("possession_status") != "ball")
+        print(f"Removed football rows: {og_len - len(df)} rows")
+
+        # Keep only pass plays
+        og_len = len(df)
+        df = df.filter(pl.col("play_type") == "play_type_pass")
+        print(f"Filtered to pass plays: {og_len - len(df)} rows removed")
+
+        # Step 4: Identify ball carrier
+        print("\n[4/11] Identifying ball carriers...")
+        # Load raw data again to get football positions
+        raw_df = pl.concat([pl.read_parquet(f) for f in parquet_files], how="vertical_relaxed")
+        raw_df = raw_df.rename({
+            "gamekey": "gameId",
+            "playid": "playId",
+            "nfl_id": "nflId",
+            "frame_id": "frameId",
+        })
+        raw_df = raw_df.filter(pl.col("play_type") == "play_type_pass")
+
+        # Get football positions
+        football_df = raw_df.filter(pl.col("possession_status") == "ball")
+
+        # Find ball carrier for each play
+        ball_carriers = []
+        priority_events = ["handoff", "first_contact", "ball_snap"]
+
+        for (game_id, play_id), group in df.group_by(["gameId", "playId"]):
+            play_football = football_df.filter(
+                (pl.col("gameId") == game_id) & (pl.col("playId") == play_id)
+            )
+
+            if len(play_football) == 0:
+                continue
+
+            # Find event frame
+            event_frame = None
+            for event in priority_events:
+                event_rows = play_football.filter(pl.col("event") == event)
+                if len(event_rows) > 0:
+                    event_frame = event_rows["frameId"].min()
+                    break
+
+            if event_frame is None:
+                event_frame = play_football["frameId"].median()
+
+            # Get football position at event frame
+            fb_at_event = play_football.filter(pl.col("frameId") == event_frame)
+            if len(fb_at_event) == 0:
+                fb_at_event = play_football.filter(
+                    pl.col("frameId") == play_football["frameId"].min()
+                )
+
+            fb_x = fb_at_event["x"].item() if len(fb_at_event) > 0 else None
+            fb_y = fb_at_event["y"].item() if len(fb_at_event) > 0 else None
+
+            if fb_x is None or fb_y is None:
+                continue
+
+            # Get offensive players at event frame
+            off_players = group.filter(
+                (pl.col("frameId") == event_frame) &
+                (pl.col("possession_status") == "off")
+            )
+
+            if len(off_players) == 0:
+                continue
+
+            # Find closest player
+            off_players = off_players.with_columns(
+                dist=((pl.col("x") - fb_x) ** 2 + (pl.col("y") - fb_y) ** 2).sqrt()
+            )
+
+            closest = off_players.sort("dist").head(1)
+            if len(closest) > 0:
+                ball_carriers.append({
+                    "gameId": game_id,
+                    "playId": play_id,
+                    "ballCarrierId": closest["nflId"].item(),
+                })
+
+        ball_carrier_df = pl.DataFrame(ball_carriers)
+        print(f"Identified ball carriers for {len(ball_carrier_df)} plays")
+        df = df.join(ball_carrier_df, on=["gameId", "playId"], how="inner")
+
+        # Step 5: Add derived features
+        print("\n[5/11] Adding derived features...")
+        df = df.with_columns(
+            is_ball_carrier=(pl.col("nflId") == pl.col("ballCarrierId")).cast(int),
+            side=pl.when(pl.col("possession_status") == "off")
+            .then(pl.lit(1))
+            .otherwise(pl.lit(-1)),
+            weight_Z=pl.lit(0.0),
+            height_Z=pl.lit(0.0),
+        )
+
+        # Convert orientation to unit vectors
+        df = df.with_columns(
+            o_rad=((pl.col("o") - 90) * -1) % 360,
+        ).with_columns(
+            ox=pl.col("o_rad").radians().cos(),
+            oy=pl.col("o_rad").radians().sin(),
+        ).drop("o_rad")
+
+        # Calculate distance to goal
+        df = df.with_columns(
+            distanceToGoal=(100 - pl.col("line_of_scrimmage")).cast(pl.Float64)
+        )
+        print("Added derived features")
+
+        # Step 6: Determine play direction
+        print("\n[6/11] Determining play directions...")
+        play_directions = (
+            df.filter(pl.col("side") == 1)
+            .group_by(["gameId", "playId"])
+            .agg([
+                pl.col("x").filter(pl.col("frameId") == pl.col("frameId").min()).mean().alias("avg_off_x"),
+                pl.col("line_of_scrimmage").first().alias("los"),
+            ])
+            .with_columns(
+                playDirection=pl.when(pl.col("avg_off_x") > pl.col("los"))
+                .then(pl.lit("left"))
+                .otherwise(pl.lit("right"))
+            )
+            .select(["gameId", "playId", "playDirection"])
+        )
+        df = df.join(play_directions, on=["gameId", "playId"], how="left")
+        print(f"Determined directions for {len(play_directions)} plays")
+
+        # Step 7: Standardize tracking directions
+        print("\n[7/11] Standardizing tracking directions...")
+        df = df.with_columns(
+            x=pl.when(pl.col("playDirection") == "right").then(pl.col("x")).otherwise(120 - pl.col("x")),
+            y=pl.when(pl.col("playDirection") == "right").then(pl.col("y")).otherwise(53.3 - pl.col("y")),
+            vx=pl.when(pl.col("playDirection") == "right").then(pl.col("vx")).otherwise(-1 * pl.col("vx")),
+            vy=pl.when(pl.col("playDirection") == "right").then(pl.col("vy")).otherwise(-1 * pl.col("vy")),
+        )
+        print("Standardized directions (all plays left-to-right)")
+
+        # Step 8: Augment with mirrored data (skip for inference - we don't need augmentation)
+        print("\n[8/11] Skipping data augmentation (not needed for inference)...")
+        df = df.with_columns(mirrored=pl.lit(False))
+
+        # Step 9: Add relative positions
+        print("\n[9/11] Adding relative positions...")
+        # Get ball carrier positions per frame
+        bc_positions = (
+            df.filter(pl.col("is_ball_carrier") == 1)
+            .select(["gameId", "playId", "frameId", "x", "y", "vx", "vy"])
+            .rename({"x": "bc_x", "y": "bc_y", "vx": "bc_vx", "vy": "bc_vy"})
+        )
+
+        # Join and calculate relative positions
+        df = df.join(bc_positions, on=["gameId", "playId", "frameId"], how="left")
+        df = df.with_columns(
+            x_rel=(pl.col("x") - pl.col("bc_x")).cast(pl.Float64),
+            y_rel=(pl.col("y") - pl.col("bc_y")).cast(pl.Float64),
+        )
+        print("Added relative positions")
+
+        # Step 10: Generate targets
+        print("\n[10/11] Generating targets...")
+        target_df = (
+            df.group_by(["gameId", "playId", "frameId", "mirrored"])
+            .agg([
+                pl.col("prePenaltyPlayResult").first().alias("yards_gained"),
+            ])
+            .with_columns(
+                yards_gained_class=(pl.col("yards_gained") - pl.lit(-10)).cast(int).clip(0, 109)
+            )
+        )
+        print(f"Generated {len(target_df)} target rows")
+
+        # Step 11: Save preprocessed data
+        print("\n[11/11] Saving preprocessed data...")
+        OUTPUT_DIR = SAMPLE_DATA_DIR / "processed"
+        OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
+
+        # For inference, we don't split - just save all as one file
+        # Select only the features we need
+        features_df = df.select([
+            "gameId", "playId", "frameId", "nflId",
+            "x_rel", "y_rel", "vx", "vy", "side", "is_ball_carrier",
+            "distanceToGoal", "mirrored"
+        ])
+
+        features_path = OUTPUT_DIR / "inference_features.parquet"
+        targets_path = OUTPUT_DIR / "inference_targets.parquet"
+
+        features_df.write_parquet(features_path)
+        target_df.write_parquet(targets_path)
+
+        print(f"Saved: {features_path}")
+        print(f"Saved: {targets_path}")
+        print(f"\nPreprocessing complete!")
+        print(f"  Features: {len(features_df)} rows")
+        print(f"  Targets: {len(target_df)} rows")
+
+        return True
+
+    except Exception as e:
+        print(f"\nERROR during preprocessing: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 def load_dataset_from_files(split, model_type):
@@ -182,42 +413,52 @@ def load_dataset_from_files(split, model_type):
     to avoid Google Drive dependencies.
 
     Args:
-        split: "train", "val", or "test"
+        split: "train", "val", or "test" (ignored if using inference files)
         model_type: "transformer" or "zoo"
 
     Returns:
         BDB2024_Dataset instance
     """
-    # Try preprocessed sample files first
-    sample_features_path = SAMPLE_DATA_DIR / f"{split}_features_sample.parquet"
-    sample_targets_path = SAMPLE_DATA_DIR / f"{split}_targets_sample.parquet"
+    # Try preprocessed inference files first (from preprocess_raw_data)
+    inference_features_path = SAMPLE_DATA_DIR / "processed" / "inference_features.parquet"
+    inference_targets_path = SAMPLE_DATA_DIR / "processed" / "inference_targets.parquet"
 
-    if sample_features_path.exists() and sample_targets_path.exists():
-        print(f"  Loading from sample files...")
-        features_df = pl.read_parquet(sample_features_path)
-        targets_df = pl.read_parquet(sample_targets_path)
+    if inference_features_path.exists() and inference_targets_path.exists():
+        print(f"  Loading from preprocessed inference files...")
+        features_df = pl.read_parquet(inference_features_path)
+        targets_df = pl.read_parquet(inference_targets_path)
     else:
-        # Fall back to full preprocessed files
-        full_features_path = Path("data/split_prepped_data_extra") / f"{split}_features.parquet"
-        full_targets_path = Path("data/split_prepped_data_extra") / f"{split}_targets.parquet"
+        # Try split-specific sample files
+        sample_features_path = SAMPLE_DATA_DIR / f"{split}_features_sample.parquet"
+        sample_targets_path = SAMPLE_DATA_DIR / f"{split}_targets_sample.parquet"
 
-        if not (full_features_path.exists() and full_targets_path.exists()):
-            raise FileNotFoundError(
-                f"Could not find data for {split} split.\n"
-                f"Looked for:\n"
-                f"  - {sample_features_path}\n"
-                f"  - {full_features_path}\n"
-                f"\nPlease run preprocessing first: python src/prep_extra_data.py"
-            )
+        if sample_features_path.exists() and sample_targets_path.exists():
+            print(f"  Loading from sample files...")
+            features_df = pl.read_parquet(sample_features_path)
+            targets_df = pl.read_parquet(sample_targets_path)
+        else:
+            # Fall back to full preprocessed files
+            full_features_path = Path("data/split_prepped_data_extra") / f"{split}_features.parquet"
+            full_targets_path = Path("data/split_prepped_data_extra") / f"{split}_targets.parquet"
 
-        print(f"  Loading from full preprocessed files...")
-        features_df = pl.read_parquet(full_features_path)
-        targets_df = pl.read_parquet(full_targets_path)
+            if not (full_features_path.exists() and full_targets_path.exists()):
+                raise FileNotFoundError(
+                    f"Could not find data for {split} split.\n"
+                    f"Looked for:\n"
+                    f"  - {inference_features_path}\n"
+                    f"  - {sample_features_path}\n"
+                    f"  - {full_features_path}\n"
+                    f"\nPlease run preprocessing first or provide preprocessed data"
+                )
 
-        # Filter to non-mirrored data only
-        print(f"  Filtering to mirrored=False...")
-        features_df = features_df.filter(pl.col("mirrored") == False)
-        targets_df = targets_df.filter(pl.col("mirrored") == False)
+            print(f"  Loading from full preprocessed files...")
+            features_df = pl.read_parquet(full_features_path)
+            targets_df = pl.read_parquet(full_targets_path)
+
+            # Filter to non-mirrored data only
+            print(f"  Filtering to mirrored=False...")
+            features_df = features_df.filter(pl.col("mirrored") == False)
+            targets_df = targets_df.filter(pl.col("mirrored") == False)
 
     # Create dataset
     # Note: BDB2024_Dataset expects data in a specific format
@@ -465,31 +706,54 @@ def main():
 
     print()
 
-    # Step 3: Run inference on all splits
+    # Step 3: Run inference
     all_predictions = []
     model_type = model.hparams.get('model_type', 'transformer')
 
-    for idx, split in enumerate(["train", "val", "test"], start=3):
-        print(f"[{idx}/4] Running inference on {split} set...")
+    # Check if we have preprocessed inference files (single file, no splits)
+    inference_features_path = SAMPLE_DATA_DIR / "processed" / "inference_features.parquet"
+
+    if inference_features_path.exists():
+        print(f"[3/4] Running inference on preprocessed data...")
 
         try:
             # Load dataset
-            dataset = load_dataset_from_files(split, model_type)
+            dataset = load_dataset_from_files("inference", model_type)
 
             # Run inference
-            predictions_df = run_inference(model, dataset, device, split=split)
+            predictions_df = run_inference(model, dataset, device, split="inference")
             all_predictions.append(predictions_df)
 
-        except FileNotFoundError as e:
-            print(f"  WARNING: Skipping {split} - {e}")
-            continue
         except Exception as e:
-            print(f"  ERROR processing {split}: {e}")
+            print(f"  ERROR processing inference data: {e}")
             import traceback
             traceback.print_exc()
-            continue
+            return
 
         print()
+    else:
+        # We have split data (train/val/test)
+        for idx, split in enumerate(["train", "val", "test"], start=3):
+            print(f"[{idx}/5] Running inference on {split} set...")
+
+            try:
+                # Load dataset
+                dataset = load_dataset_from_files(split, model_type)
+
+                # Run inference
+                predictions_df = run_inference(model, dataset, device, split=split)
+                all_predictions.append(predictions_df)
+
+            except FileNotFoundError as e:
+                print(f"  WARNING: Skipping {split} - {e}")
+                continue
+            except Exception as e:
+                print(f"  ERROR processing {split}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+
+            print()
 
     if not all_predictions:
         print("\nERROR: No predictions were generated!")
