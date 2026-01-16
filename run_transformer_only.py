@@ -128,7 +128,7 @@ def check_and_sync_files():
 
     print()
 
-    # Check target files (needed by dataset loading)
+    # Check target files (needed by dataset loading and results generation)
     TARGET_DIR = Path("data/split_prepped_data_extra")
     TARGET_DRIVE_DIR = Path("/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm")
 
@@ -170,7 +170,46 @@ def check_and_sync_files():
 
     print()
 
-    return source_files_exist, filtered_files_exist, targets_exist
+    # Check feature files (needed for results generation)
+    features_exist = True
+    features_local_count = 0
+    features_drive_count = 0
+
+    print("Feature files (needed for results generation):")
+    for split in splits:
+        local_path = TARGET_DIR / f"{split}_features.parquet"
+        drive_path = TARGET_DRIVE_DIR / f"{split}_features.parquet"
+
+        if local_path.exists():
+            size_mb = local_path.stat().st_size / (1024 * 1024)
+            print(f"  ✓ Local: {local_path} ({size_mb:.1f} MB)")
+            features_local_count += 1
+        elif drive_path.exists():
+            size_mb = drive_path.stat().st_size / (1024 * 1024)
+            print(f"  📁 Drive: {drive_path} ({size_mb:.1f} MB)")
+            print(f"     → Copying to {local_path}...")
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(drive_path, local_path)
+            print(f"     ✓ Copied successfully")
+            features_local_count += 1
+            features_drive_count += 1
+        else:
+            print(f"  ❌ Missing: {split}_features.parquet (not in local or Drive)")
+            features_exist = False
+
+    print()
+
+    if features_drive_count > 0:
+        print(f"✓ Synced {features_drive_count} feature file(s) from Drive")
+
+    if features_local_count == 3:
+        print(f"✓ All feature files available locally ({features_local_count}/3)")
+    else:
+        print(f"⚠️  Feature files missing - results generation will fail ({features_local_count}/3)")
+
+    print()
+
+    return source_files_exist, filtered_files_exist, targets_exist, features_exist
 
 
 def run_command(cmd: str, description: str):
@@ -231,7 +270,7 @@ def main():
     print("="*60 + "\n")
 
     # Check and sync files from Google Drive
-    source_files_exist, filtered_files_exist, targets_exist = check_and_sync_files()
+    source_files_exist, filtered_files_exist, targets_exist, features_exist = check_and_sync_files()
 
     # Check for target files
     if not targets_exist:
@@ -240,6 +279,15 @@ def main():
         print("   Please ensure target files are available on Google Drive at:")
         print("   /content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm/")
         sys.exit(1)
+
+    # Check for feature files (needed for results generation)
+    if not features_exist:
+        print("⚠️  Warning: Feature files not found")
+        print("   Results generation will fail without feature files")
+        print("   Please ensure feature files are available on Google Drive at:")
+        print("   /content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm/")
+        print("   Continuing with training, but skipping results generation")
+        print()
 
     # Determine if we can skip filtering
     if filtered_files_exist and skip_filter:
@@ -286,10 +334,13 @@ def main():
 
     # Step 3: Generate results summary
     if not args.skip_results:
-        run_command(
-            f"{python_cmd} src/generate_results_summary.py --models-dir models_norm_football --prepped-data-dir data/split_prepped_data_extra",
-            "Step 3: Generating results summary"
-        )
+        if not features_exist:
+            print("\n⏭️  Skipping results summary generation (feature files not available)\n")
+        else:
+            run_command(
+                f"{python_cmd} src/generate_results_summary.py --models-dir models_norm_football --prepped-data-dir data/split_prepped_data_extra",
+                "Step 3: Generating results summary"
+            )
     else:
         print("\n⏭️  Skipping results summary generation (--skip-results)\n")
 
