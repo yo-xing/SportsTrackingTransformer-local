@@ -1,7 +1,7 @@
 """
 Find and visualize 5 plays of each type from top 10% MAE from the 23-entity-football model.
 For pass and rush plays, ensure at least 2 are above 10 yards.
-Saves HTML visualizations to ./visualizations/ folder.
+Saves HTML animations and PNG graphs to ./visualizations/ folder.
 """
 
 import re
@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import matplotlib.pyplot as plt
 
 # Configuration
 OUTPUT_DIR = Path('./visualizations')
@@ -362,171 +362,128 @@ def animate_play_with_predictions(
 
     return fig
 
-def create_combined_visualization(
-    animation_fig: go.Figure,
-    test_results: pl.DataFrame,
-    gameId: int,
-    playId: int,
-    output_path: Path,
-):
-    """
-    Create an HTML file with the play animation on the left and prediction graphs on the right.
-    """
-    if animation_fig is None:
-        print(f"  ⚠️  No animation figure for game {gameId}, play {playId}")
+def visualize_play_v3(test_results: pl.DataFrame, game_id: int, play_id: int, output_path: Path, prepped_data_path: Path):
+    """Create matplotlib graph showing predictions and error over time."""
+
+    play_data = test_results.filter(
+        (pl.col("gameId") == game_id) &
+        (pl.col("playId") == play_id)
+    ).sort("frameId")
+
+    if len(play_data) == 0:
+        print(f"  ⚠️  No data found for gameId={game_id}, playId={play_id}")
         return None
 
-    # Get results for this play
-    results_df = test_results.filter(
-        (pl.col("gameId") == gameId) & (pl.col("playId") == playId)
-    ).sort("frameId").to_pandas()
+    play_df = play_data.to_pandas()
+    actual_yards = play_df["yards_gained"].iloc[0]
 
-    if len(results_df) == 0:
-        print(f"  ⚠️  No results data found for gameId={gameId}, playId={playId}")
-        return None
+    # Load the original prepped data to get play type, metadata, and events
+    play_type = "Unknown"
+    play_desc = "Description not available"
+    events_df = None
 
-    actual_yards = results_df["yards_gained"].iloc[0]
-    results_df["absolute_error"] = (results_df["expected_yards"] - actual_yards).abs()
+    try:
+        test_data_path = prepped_data_path / "test_features.parquet"
+        if test_data_path.exists():
+            full_data = pl.read_parquet(test_data_path)
 
-    # Extract title from animation figure
-    title_text = animation_fig.layout.title.text if animation_fig.layout.title else ""
+            play_info = full_data.filter(
+                (pl.col("gameId") == game_id) &
+                (pl.col("playId") == play_id)
+            )
 
-    # Create prediction graphs
-    pred_fig = make_subplots(
-        rows=2, cols=1,
-        subplot_titles=("Expected Yards Over Time", "Prediction Error Over Time"),
-        vertical_spacing=0.12
-    )
+            if len(play_info) > 0:
+                if "play_type" in play_info.columns:
+                    play_type = play_info["play_type"][0]
+                    if play_type and play_type.startswith("play_type_"):
+                        play_type = play_type.replace("play_type_", "").replace("_", " ").title()
 
-    # Top graph: Expected yards
-    pred_fig.add_trace(
-        go.Scatter(
-            x=results_df["frameId"], y=results_df["expected_yards"],
-            mode="lines+markers", name="Predicted",
-            line=dict(color="#1E90FF", width=2), marker=dict(size=6)
-        ),
-        row=1, col=1
-    )
-    pred_fig.add_trace(
-        go.Scatter(
-            x=[results_df["frameId"].min(), results_df["frameId"].max()],
-            y=[actual_yards, actual_yards],
-            mode="lines", name=f"Actual: {actual_yards:.1f}",
-            line=dict(color="red", width=2, dash="dash")
-        ),
-        row=1, col=1
-    )
+                desc_parts = []
+                if "down" in play_info.columns and "yardsToGo" in play_info.columns:
+                    down = play_info["down"][0]
+                    yards_to_go = play_info["yardsToGo"][0]
+                    if down is not None and yards_to_go is not None:
+                        desc_parts.append(f"{int(down)} & {int(yards_to_go)}")
 
-    # Bottom graph: Absolute error
-    pred_fig.add_trace(
-        go.Scatter(
-            x=results_df["frameId"], y=results_df["absolute_error"],
-            mode="lines+markers", name="Absolute Error",
-            line=dict(color="#FF6347", width=2), marker=dict(size=6),
-            fill="tozeroy", fillcolor="rgba(255, 99, 71, 0.2)"
-        ),
-        row=2, col=1
-    )
-    pred_fig.add_trace(
-        go.Scatter(
-            x=[results_df["frameId"].min(), results_df["frameId"].max()],
-            y=[0, 0],
-            mode="lines", name="Perfect",
-            line=dict(color="green", width=2, dash="dash")
-        ),
-        row=2, col=1
-    )
+                if "quarter" in play_info.columns:
+                    quarter = play_info["quarter"][0]
+                    if quarter is not None:
+                        desc_parts.append(f"Q{int(quarter)}")
 
-    pred_fig.update_layout(
-        height=800,
-        paper_bgcolor="#333333",
-        plot_bgcolor="#363636",
-        font=dict(color="white"),
-        showlegend=True,
-        legend=dict(x=1.02, y=1, xanchor="left"),
-        margin=dict(l=60, r=100, t=60, b=40),
-    )
+                if desc_parts:
+                    play_desc = " | ".join(desc_parts)
 
-    pred_fig.update_xaxes(title_text="Frame ID", gridcolor="rgba(255,255,255,0.1)")
-    pred_fig.update_yaxes(title_text="Yards", gridcolor="rgba(255,255,255,0.1)", row=1, col=1)
-    pred_fig.update_yaxes(title_text="Error (yards)", gridcolor="rgba(255,255,255,0.1)", row=2, col=1)
+                if "event" in play_info.columns and "frameId" in play_info.columns:
+                    events_data = play_info.filter(
+                        pl.col("event").is_not_null() &
+                        (pl.col("event") != "None") &
+                        (pl.col("event") != "")
+                    ).select(["frameId", "event"]).unique()
 
-    # Create combined HTML
-    animation_html = animation_fig.to_html(full_html=False, include_plotlyjs=False)
-    pred_html = pred_fig.to_html(full_html=False, include_plotlyjs=False)
+                    if len(events_data) > 0:
+                        events_df = events_data.to_pandas()
 
-    combined_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Play Visualization - Game {gameId}, Play {playId}</title>
-        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-        <style>
-            body {{
-                background-color: #222;
-                color: white;
-                font-family: Arial, sans-serif;
-                margin: 0;
-                padding: 20px;
-            }}
-            .container {{
-                display: flex;
-                flex-direction: row;
-                gap: 40px;
-                width: 100%;
-                max-width: 1900px;
-                margin: 0 auto;
-            }}
-            .animation-panel {{
-                flex: 0 0 55%;
-                min-width: 600px;
-            }}
-            .graphs-panel {{
-                flex: 0 0 40%;
-                min-width: 500px;
-                padding-left: 20px;
-            }}
-            h1 {{
-                text-align: center;
-                margin-bottom: 20px;
-            }}
-            .legend-box {{
-                background-color: #444;
-                padding: 10px;
-                border-radius: 5px;
-                margin-bottom: 10px;
-                font-size: 12px;
-            }}
-            .legend-item {{
-                display: inline-block;
-                margin-right: 15px;
-            }}
-        </style>
-    </head>
-    <body>
-        <h1>{title_text}</h1>
+    except Exception as e:
+        print(f"  ⚠️  Could not load play metadata: {e}")
 
-        <div class="container">
-            <div class="animation-panel">
-                <div class="legend-box">
-                    <span class="legend-item"><span style="color: #89CFF0;">━━</span> LOS</span>
-                    <span class="legend-item"><span style="color: #FFFF00;">━━</span> 1st Down</span>
-                    <span class="legend-item"><span style="color: #00FF00;">━━</span> Actual</span>
-                    <span class="legend-item"><span style="color: #FFD700;">┄┄</span> Predicted</span>
-                </div>
-                {animation_html}
-            </div>
+    # Truncate description if too long
+    if len(str(play_desc)) > 80:
+        play_desc_short = str(play_desc)[:77] + "..."
+    else:
+        play_desc_short = str(play_desc)
 
-            <div class="graphs-panel">
-                {pred_html}
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+    fig, axes = plt.subplots(2, 1, figsize=(14, 12))
 
-    with open(output_path, "w") as f:
-        f.write(combined_html)
+    # Plot 1: Expected yards over time
+    ax1 = axes[0]
+    ax1.plot(play_df["frameId"], play_df["expected_yards"], 'b-o', linewidth=2, markersize=6, label='Predicted yards')
+    ax1.axhline(y=actual_yards, color='r', linestyle='--', linewidth=2, label=f'Actual yards: {actual_yards:.1f}')
+
+    # Add event markers if available
+    if events_df is not None and len(events_df) > 0:
+        for idx, event_row in events_df.iterrows():
+            frame_id = event_row["frameId"]
+            event_name = event_row["event"]
+
+            ax1.axvline(x=frame_id, color='orange', linestyle=':', alpha=0.7, linewidth=1.5)
+            ax1.text(frame_id, ax1.get_ylim()[1] * 0.95, event_name,
+                    rotation=90, verticalalignment='top', fontsize=8, color='orange')
+
+    ax1.set_xlabel("Frame ID", fontsize=12)
+    ax1.set_ylabel("Yards", fontsize=12)
+    ax1.set_title(f"Model Predictions Over Time\nGame {game_id}, Play {play_id} | Play Type: {play_type}\n{play_desc_short}",
+                  fontsize=12, fontweight='bold')
+    ax1.legend(fontsize=11)
+    ax1.grid(True, alpha=0.3)
+
+    # Plot 2: Absolute prediction error over time
+    ax2 = axes[1]
+    absolute_error = (play_df["expected_yards"] - actual_yards).abs()
+
+    ax2.fill_between(play_df["frameId"], 0, absolute_error, alpha=0.3, color='red')
+    ax2.plot(play_df["frameId"], absolute_error, 'ro-', linewidth=2, markersize=6, label='Absolute Error')
+    ax2.axhline(y=0, color='g', linestyle='--', linewidth=2, alpha=0.5, label='Perfect Prediction')
+
+    # Add event markers to second plot as well
+    if events_df is not None and len(events_df) > 0:
+        for idx, event_row in events_df.iterrows():
+            frame_id = event_row["frameId"]
+            event_name = event_row["event"]
+
+            ax2.axvline(x=frame_id, color='orange', linestyle=':', alpha=0.7, linewidth=1.5)
+            ax2.text(frame_id, ax2.get_ylim()[1] * 0.95, event_name,
+                    rotation=90, verticalalignment='top', fontsize=8, color='orange')
+
+    ax2.set_xlabel("Frame ID", fontsize=12)
+    ax2.set_ylabel("Absolute Error (yards)", fontsize=12)
+    ax2.set_title("Prediction Accuracy Over Time (Lower = Better)", fontsize=14, fontweight='bold')
+    ax2.legend(fontsize=11)
+    ax2.grid(True, alpha=0.3)
+    ax2.set_ylim(bottom=0)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
 
     return output_path
 
@@ -579,8 +536,6 @@ joined_orig = test_orig.join(ngs_metadata, on=['gameId', 'playId', 'frameId'], h
 
 test_mirror = test_df.filter(pl.col('mirrored') == True)
 if len(test_mirror) > 0:
-    # For mirrored plays, join on gameId and playId only (no frameId match needed)
-    # But add 'event' column as null to match schema
     play_meta = ngs_metadata.select(['gameId', 'playId', 'play_type']).unique()
     joined_mirror = test_mirror.join(play_meta, on=['gameId', 'playId'], how='left')
     joined_mirror = joined_mirror.with_columns(pl.lit(None).alias('event'))
@@ -686,15 +641,15 @@ if not tracking_path.exists():
 tracking_df = pl.read_parquet(tracking_path)
 print(f"✓ Loaded tracking data: {len(tracking_df):,} frames")
 
-# Note: gamestate_norm has extra columns (yardsToGo, down, quarter, half_seconds_remaining)
-# The visualization function will use what it needs - no filtering required
-# since the animate function accesses columns by name, not position
-
 # Add expected_yards column to joined data for visualization
 joined = joined.with_columns(pl.col('pred_yards').alias('expected_yards'))
 
-print("\nStep 8: Creating HTML visualizations...")
-created_files = []
+# Also add yards_gained column (needed by visualize_play_v3)
+joined = joined.with_columns(pl.col('true_yards').alias('yards_gained'))
+
+print("\nStep 8: Creating visualizations (HTML animations + PNG graphs)...")
+created_html = []
+created_png = []
 
 for row in best_plays_df.iter_rows(named=True):
     game_id = row['gameId']
@@ -702,23 +657,28 @@ for row in best_plays_df.iter_rows(named=True):
     play_type = row['play_type'].replace('play_type_', '')
     mae = row['play_mae']
 
-    output_filename = f"{play_type}_game{game_id}_play{play_id}_mae{mae:.2f}.html"
-    output_path = OUTPUT_DIR / output_filename
+    base_filename = f"{play_type}_game{game_id}_play{play_id}_mae{mae:.2f}"
+    html_path = OUTPUT_DIR / f"{base_filename}.html"
+    png_path = OUTPUT_DIR / f"{base_filename}.png"
 
-    print(f"\n  Creating {output_filename}...")
+    print(f"\n  Creating visualizations for {base_filename}...")
 
-    # Create animation
+    # Create animation HTML
     fig = animate_play_with_predictions(tracking_df, joined, game_id, play_id)
-
     if fig is not None:
-        # Create combined visualization
-        result_path = create_combined_visualization(fig, joined, game_id, play_id, output_path)
-        if result_path:
-            created_files.append(result_path)
-            print(f"    ✓ Saved: {output_filename}")
+        fig.write_html(html_path)
+        created_html.append(html_path)
+        print(f"    ✓ Saved HTML: {html_path.name}")
+
+    # Create PNG graph
+    result_png = visualize_play_v3(joined, game_id, play_id, png_path, PREPPED_DATA_PATH)
+    if result_png:
+        created_png.append(result_png)
+        print(f"    ✓ Saved PNG: {png_path.name}")
 
 print("\n" + "="*80)
 print("✅ VISUALIZATION COMPLETE!")
 print("="*80)
 print(f"\nAll visualizations saved to: {OUTPUT_DIR.absolute()}")
-print(f"Total HTML files created: {len(created_files)}")
+print(f"Total HTML animations created: {len(created_html)}")
+print(f"Total PNG graphs created: {len(created_png)}")
