@@ -22,6 +22,7 @@ from src.prep_extra_data import (
     add_derived_features,
     determine_play_direction,
     standardize_tracking_directions,
+    augment_mirror_tracking,
     add_relative_positions,
     get_yards_gained_target_df
 )
@@ -81,6 +82,9 @@ def process_sample_data(sample_data_dir: Path, output_dir: Path):
 
     print("Standardizing tracking directions...")
     df = standardize_tracking_directions(df)
+
+    print("Augmenting with mirrored plays...")
+    df = augment_mirror_tracking(df)
 
     print("Adding relative positions...")
     df = add_relative_positions(df)
