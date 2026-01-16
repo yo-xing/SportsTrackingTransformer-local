@@ -105,52 +105,81 @@ python run_inference.py
 ```
 
 **Expected Runtime**:
-- CPU: 2-5 minutes
-- GPU: 30-60 seconds
+- First run (with preprocessing): 5-10 minutes CPU, 2-3 minutes GPU
+- Subsequent runs (cached): 1-2 minutes CPU, 30-60 seconds GPU
 
-**Output**:
+**Pipeline Steps**:
+
+The script automatically runs the complete inference pipeline:
+
+1. **Check model checkpoint** - Verifies model .ckpt file exists
+2. **Check sample data** - Verifies raw Axially format data exists
+3. **Preprocess data** - Converts Axially → BDB 2024 format (auto-skipped if cached)
+4. **Filter features** - Reduces 11 features → 7 features (auto-skipped if cached)
+5. **Setup inference** - Copies checkpoint to expected location
+6. **Run inference** - Generates predictions using trained model
+
+**Sample Output**:
 ```
 ==============================================================
 Sports Tracking Transformer - Simple Inference
 ==============================================================
 
-[1/4] Checking sample data...
-Found raw Axially-format data:
-  58503.parquet (3.9 MB)
+[1/6] Checking model checkpoint...
+✓ Found checkpoint: epoch=41-val_loss=2.730.ckpt (2.49 MB)
 
-[2/4] Loading model...
-Loading model from: epoch=41-val_loss=2.730.ckpt
-Using GPU: NVIDIA GeForce RTX 3090
-Model Configuration:
-  Architecture: transformer
-  Model Dimension: 64
-  Layers: 4
-  Learning Rate: 0.0001
-  Total Parameters: 203,520
-  Trainable Parameters: 203,520
+[2/6] Checking sample data...
+✓ Found raw sample data:
+    58503.parquet (3.9 MB)
 
-[3/4] Running inference on train set...
-  Loading from sample files...
-  Created dataset with 8453 frames
-  Running inference on 8453 samples...
+[3/6] Preparing data...
+   Preprocessed data not found. Running prep_extra_data.py...
 
-  TRAIN Metrics:
-    MAE: 4.32 yards
-    Mean predicted: 5.87 yards
-    Mean actual: 6.01 yards
+============================================================
+Step 3a: Preprocessing raw data (Axially → BDB 2024 format)
+============================================================
+Processing 58503.parquet...
+Identified ball carriers for 43 plays
+Created train/val/test splits
+Saved to data/split_prepped_data_extra/
 
-[4/4] Saving predictions...
-  Saved to: inference/predictions.csv
+✓ Step 3a: Preprocessing raw data complete
+
+[4/6] Filtering features...
+   Filtered datasets not found. Running filter_features.py...
+
+============================================================
+Step 4a: Filtering datasets (11 features → 7 features)
+============================================================
+Loading train dataset: 8,453 frames
+Loading val dataset: 8,453 frames
+Loading test dataset: 8,453 frames
+Saved filtered datasets to data/datasets_extra_norm_football/
+
+✓ Step 4a: Filtering datasets complete
+
+[5/6] Setting up inference...
+   Copying checkpoint to temporary location...
+
+[6/6] Running inference...
+
+============================================================
+Generating results summary
+============================================================
+Loading model M64_L4_LR1e-04...
+Running inference on test set (8,453 frames)...
+Test MAE: 4.44 yards
+
+Results saved to: models_norm_football/transformer/M64_L4_LR1e-04/
+  - epoch=41-val_loss=2.730.results.parquet
+
+✓ Generating results summary complete
 
 ==============================================================
 Inference Complete!
 ==============================================================
-Total predictions: 25,359
-  train: 8,453 predictions, MAE: 4.32 yards
-  val: 8,453 predictions, MAE: 4.34 yards
-  test: 8,453 predictions, MAE: 4.44 yards
 
-Results saved to: inference/predictions.csv
+Predictions saved to: inference/predictions/epoch=41-val_loss=2.730.results.parquet
 ```
 
 ### Understanding the Output
@@ -293,23 +322,55 @@ The script validates:
 
 See [MODEL_WRITEUP.html](MODEL_WRITEUP.html) for complete analysis.
 
+### Entity Encoding (23 Entities)
+
+The model tracks all field participants as separate entities with identical feature representations:
+
+**Players (22 entities)**:
+- 11 offensive players
+- 11 defensive players
+- Each encoded with relative position, velocity, team assignment, and role
+
+**Football (1 entity)**:
+- Treated as 23rd entity with same feature structure
+- Provides explicit ball trajectory information
+- Enables better understanding of pass plays and incomplete passes
+
+**Goal Line (implicit)**:
+- Not tracked as separate entity
+- Encoded through `distanceToGoal` feature (shared across all entities)
+- Provides field position context for all players and football
+
 ### Features (7 per entity)
 
-**Entity Features (6)**:
-1. `x_rel`: Position relative to ball carrier (x-axis)
-2. `y_rel`: Position relative to ball carrier (y-axis)
+Each of the 23 entities is represented by 7 features:
+
+**Entity-Specific Features (6)**:
+1. `x_rel`: Position relative to ball carrier in x-direction (yards)
+   - Normalized to make model invariant to absolute field position
+
+2. `y_rel`: Position relative to ball carrier in y-direction (yards)
+   - Captures lateral positioning relative to ball carrier
+
 3. `vx`: Velocity in x-direction (yards/sec)
+   - Cartesian format for direct movement pattern learning
+
 4. `vy`: Velocity in y-direction (yards/sec)
-5. `side`: Team (1=offense, -1=defense, 0=football)
-6. `is_ball_carrier`: Binary flag (1=carrier, 0=other)
+   - Captures perpendicular movement (lateral cuts, pursuit angles)
 
-**Game State Feature (1)**:
-7. `distanceToGoal`: Yards from goal line
+5. `side`: Team indicator
+   - `1` = offensive player
+   - `-1` = defensive player
+   - `0` = football
 
-### Entities Tracked (23)
+6. `is_ball_carrier`: Binary flag identifying ball carrier
+   - `1` = this player has the ball
+   - `0` = all other entities (including football)
 
-- **22 Players**: 11 offense + 11 defense
-- **1 Football**: Tracked as 23rd entity with same features
+**Shared Game State Feature (1)**:
+7. `distanceToGoal`: Yards from offensive team's goal line
+   - Same value for all 23 entities in a given frame
+   - Provides field position context (red zone awareness, field compression)
 
 ### Output (110 Classes)
 
