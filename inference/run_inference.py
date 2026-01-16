@@ -107,6 +107,23 @@ def load_model(checkpoint_path):
     print(f"  Total Parameters: {total_params:,}")
     print(f"  Trainable Parameters: {trainable_params:,}")
 
+    # Training data info (from MODEL_WRITEUP.html)
+    print(f"\nTraining Data (23-entity-football / Min+Football):")
+    print(f"  Dataset: 18 weeks of NFL tracking data")
+    print(f"  Train: 1,994,318 frames (~46,000 plays)")
+    print(f"  Validation: 429,224 frames (~9,900 plays)")
+    print(f"  Test: 433,398 frames (~10,000 plays)")
+    print(f"  Total: ~2.86M frames across ~65,900 plays")
+    print(f"  Features: 7 per entity (x_rel, y_rel, vx, vy, side, is_ball_carrier, distanceToGoal)")
+    print(f"  Entities: 23 (22 players + 1 football)")
+
+    # Model performance
+    print(f"\nModel Performance (Test Set):")
+    print(f"  Test MAE: 4.44 yards")
+    print(f"  Ranking: Best model (10.7% better than baseline)")
+    print(f"  Pass plays: 5.85 yards MAE")
+    print(f"  Rush plays: 2.97 yards MAE")
+
     return model, device
 
 
