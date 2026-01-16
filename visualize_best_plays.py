@@ -363,7 +363,7 @@ def animate_play_with_predictions(
     return fig
 
 def visualize_play_v3(test_results: pl.DataFrame, game_id: int, play_id: int, output_path: Path, prepped_data_path: Path):
-    """Create matplotlib graph showing predictions and error over time."""
+    """Create matplotlib graph showing predicted vs actual yards with event markers."""
 
     play_data = test_results.filter(
         (pl.col("gameId") == game_id) &
@@ -432,54 +432,41 @@ def visualize_play_v3(test_results: pl.DataFrame, game_id: int, play_id: int, ou
     else:
         play_desc_short = str(play_desc)
 
-    fig, axes = plt.subplots(2, 1, figsize=(14, 12))
+    # Create single plot
+    fig, ax = plt.subplots(figsize=(16, 8))
 
-    # Plot 1: Expected yards over time
-    ax1 = axes[0]
-    ax1.plot(play_df["frameId"], play_df["expected_yards"], 'b-o', linewidth=2, markersize=6, label='Predicted yards')
-    ax1.axhline(y=actual_yards, color='r', linestyle='--', linewidth=2, label=f'Actual yards: {actual_yards:.1f}')
+    # Plot predicted yards (blue line)
+    ax.plot(play_df["frameId"], play_df["expected_yards"],
+            'b-o', linewidth=2.5, markersize=7, label='Predicted Yards', alpha=0.8)
+
+    # Plot actual yards (horizontal red line)
+    ax.axhline(y=actual_yards, color='red', linestyle='--', linewidth=3,
+               label=f'Actual Yards: {actual_yards:.1f}', alpha=0.9)
 
     # Add event markers if available
     if events_df is not None and len(events_df) > 0:
+        # Get y-axis limits for positioning
+        y_min, y_max = ax.get_ylim()
+        y_range = y_max - y_min
+
         for idx, event_row in events_df.iterrows():
             frame_id = event_row["frameId"]
             event_name = event_row["event"]
 
-            ax1.axvline(x=frame_id, color='orange', linestyle=':', alpha=0.7, linewidth=1.5)
-            ax1.text(frame_id, ax1.get_ylim()[1] * 0.95, event_name,
-                    rotation=90, verticalalignment='top', fontsize=8, color='orange')
+            # Draw vertical line for event
+            ax.axvline(x=frame_id, color='orange', linestyle=':', alpha=0.6, linewidth=2)
 
-    ax1.set_xlabel("Frame ID", fontsize=12)
-    ax1.set_ylabel("Yards", fontsize=12)
-    ax1.set_title(f"Model Predictions Over Time\nGame {game_id}, Play {play_id} | Play Type: {play_type}\n{play_desc_short}",
-                  fontsize=12, fontweight='bold')
-    ax1.legend(fontsize=11)
-    ax1.grid(True, alpha=0.3)
+            # Add event label at the top
+            ax.text(frame_id, y_max - (y_range * 0.05), event_name,
+                    rotation=90, verticalalignment='top', horizontalalignment='right',
+                    fontsize=9, color='orange', fontweight='bold')
 
-    # Plot 2: Absolute prediction error over time
-    ax2 = axes[1]
-    absolute_error = (play_df["expected_yards"] - actual_yards).abs()
-
-    ax2.fill_between(play_df["frameId"], 0, absolute_error, alpha=0.3, color='red')
-    ax2.plot(play_df["frameId"], absolute_error, 'ro-', linewidth=2, markersize=6, label='Absolute Error')
-    ax2.axhline(y=0, color='g', linestyle='--', linewidth=2, alpha=0.5, label='Perfect Prediction')
-
-    # Add event markers to second plot as well
-    if events_df is not None and len(events_df) > 0:
-        for idx, event_row in events_df.iterrows():
-            frame_id = event_row["frameId"]
-            event_name = event_row["event"]
-
-            ax2.axvline(x=frame_id, color='orange', linestyle=':', alpha=0.7, linewidth=1.5)
-            ax2.text(frame_id, ax2.get_ylim()[1] * 0.95, event_name,
-                    rotation=90, verticalalignment='top', fontsize=8, color='orange')
-
-    ax2.set_xlabel("Frame ID", fontsize=12)
-    ax2.set_ylabel("Absolute Error (yards)", fontsize=12)
-    ax2.set_title("Prediction Accuracy Over Time (Lower = Better)", fontsize=14, fontweight='bold')
-    ax2.legend(fontsize=11)
-    ax2.grid(True, alpha=0.3)
-    ax2.set_ylim(bottom=0)
+    ax.set_xlabel("Frame ID", fontsize=14, fontweight='bold')
+    ax.set_ylabel("Yards Gained", fontsize=14, fontweight='bold')
+    ax.set_title(f"Expected vs Actual Yards Gained\nGame {game_id}, Play {play_id} | {play_type} | {play_desc_short}",
+                  fontsize=14, fontweight='bold', pad=20)
+    ax.legend(fontsize=12, loc='best', framealpha=0.9)
+    ax.grid(True, alpha=0.3, linestyle='--')
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
