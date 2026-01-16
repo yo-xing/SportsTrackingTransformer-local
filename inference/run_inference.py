@@ -648,7 +648,14 @@ def run_inference(model, dataset, device, split):
 
     # Calculate metrics
     mae = np.abs(df['predicted_yards'] - df['actual_yards']).mean()
+    num_frames = len(df)
+    num_plays = df.groupby(['gameId', 'playId']).ngroups
+    avg_frames_per_play = num_frames / num_plays if num_plays > 0 else 0
+
     print(f"\n  {split.upper()} Metrics:")
+    print(f"    Frames: {num_frames}")
+    print(f"    Plays: {num_plays}")
+    print(f"    Avg frames/play: {avg_frames_per_play:.1f}")
     print(f"    MAE: {mae:.2f} yards")
     print(f"    Mean predicted: {df['predicted_yards'].mean():.2f} yards")
     print(f"    Mean actual: {df['actual_yards'].mean():.2f} yards")
@@ -773,15 +780,29 @@ def main():
     print("="*60)
     print("Inference Complete!")
     print("="*60)
-    print(f"Total predictions: {len(combined_predictions)}")
 
-    for split in ["train", "val", "test"]:
+    # Overall statistics
+    total_frames = len(combined_predictions)
+    total_plays = combined_predictions.groupby(['gameId', 'playId']).ngroups
+    print(f"Total predictions: {total_frames} frames across {total_plays} plays")
+    print()
+
+    # Per-split statistics
+    for split in ["train", "val", "test", "inference"]:
         split_df = combined_predictions[combined_predictions['dataset_split'] == split]
         if len(split_df) > 0:
             mae = np.abs(split_df['predicted_yards'] - split_df['actual_yards']).mean()
-            print(f"  {split}: {len(split_df)} predictions, MAE: {mae:.2f} yards")
+            num_frames = len(split_df)
+            num_plays = split_df.groupby(['gameId', 'playId']).ngroups
+            avg_frames_per_play = num_frames / num_plays
 
-    print()
+            print(f"  {split.upper()}:")
+            print(f"    Frames: {num_frames}")
+            print(f"    Plays: {num_plays}")
+            print(f"    Avg frames/play: {avg_frames_per_play:.1f}")
+            print(f"    MAE: {mae:.2f} yards")
+            print()
+
     print(f"Results saved to: {output_path}")
     print()
 
