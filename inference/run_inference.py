@@ -146,8 +146,10 @@ def main():
 
     if missing_files:
         print("   Preprocessed data not found. Running prep_extra_data.py...")
+        # Need to run from repository root, not inference/
+        repo_root = INFERENCE_DIR.parent
         run_command(
-            f"{python_cmd} src/prep_extra_data.py",
+            f"cd {repo_root} && {python_cmd} src/prep_extra_data.py",
             "Step 3a: Preprocessing raw data (Axially → BDB 2024 format)"
         )
     else:
@@ -169,8 +171,10 @@ def main():
 
     if missing_filtered:
         print("   Filtered datasets not found. Running filter_features.py...")
+        # Need to run from repository root, not inference/
+        repo_root = INFERENCE_DIR.parent
         run_command(
-            f"{python_cmd} filter_features.py",
+            f"cd {repo_root} && {python_cmd} filter_features.py",
             "Step 4a: Filtering datasets (11 features → 7 features)"
         )
     else:
@@ -197,8 +201,10 @@ def main():
     # Step 6: Run inference using generate_results_summary.py
     print("[6/6] Running inference...")
 
+    # Need to run from repository root, not inference/
+    repo_root = INFERENCE_DIR.parent
     run_command(
-        f"{python_cmd} src/generate_results_summary.py "
+        f"cd {repo_root} && {python_cmd} src/generate_results_summary.py "
         f"--models-dir models_norm_football "
         f"--prepped-data-dir data/split_prepped_data_extra",
         "Generating results summary"
