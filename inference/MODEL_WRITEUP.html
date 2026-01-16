@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predicting NFL Yards Gained with RFID Tracking Data</title>
+    <style>
+        @media print {
+            body { margin: 0.5in; }
+            h1, h2, h3 { page-break-after: avoid; }
+            table { page-break-inside: avoid; }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 8.5in;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+        }
+
+        h1 {
+            color: #1a1a1a;
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 10px;
+            margin-top: 0;
+            font-size: 28px;
+        }
+
+        h2 {
+            color: #0066cc;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 22px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 5px;
+        }
+
+        h3 {
+            color: #333;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+            margin-top: -10px;
+            margin-bottom: 20px;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #ddd;
+            margin: 20px 0;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+            color: #333;
+        }
+
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        strong {
+            color: #0066cc;
+            font-weight: 600;
+        }
+
+        ul {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        .highlight-box {
+            background-color: #f0f8ff;
+            border-left: 4px solid #0066cc;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .metric {
+            font-size: 18px;
+            color: #0066cc;
+            font-weight: bold;
+        }
+
+        code {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .winner-highlight {
+            background-color: #e8f5e9;
+            border-left: 4px solid #4caf50;
+        }
+    </style>
+</head>
+<body>
+    <h1>Predicting NFL Yards Gained with RFID Tracking Data</h1>
+    <div class="subtitle">Executive Summary: Model Comparison and Results</div>
+
+    <hr>
+
+    <h2>Executive Summary</h2>
+    <p>Using real-time RFID player tracking data, we developed machine learning models to predict yards gained on NFL plays. Our best model, <strong>Min+Football</strong>, achieves an average prediction error of <strong>4.44 yards</strong>—less than half a first down—by tracking the football as a 23rd entity alongside 22 players. The key finding: tracking the football's position provides a 2% improvement over the same features without it, while overloading the model with comprehensive game state features actually hurts performance.</p>
+
+    <hr>
+
+    <h2>The Problem</h2>
+    <p>NFL RFID tracking systems capture the real-time position and velocity of all 22 players on the field at 10 frames per second. The challenge: predict how many yards will be gained on each play as it unfolds. This is a <strong>110-class classification problem</strong> (predicting yards from -10 to +99), with applications in live game analytics, defensive positioning assessment, and play outcome prediction. The difficulty lies in translating fluid, dynamic player movements into accurate yard predictions across diverse game situations.</p>
+
+    <hr>
+
+    <h2>Our Approach: Four Model Variations</h2>
+    <p>We tested four variations of a Transformer architecture, all trained on the same 18 weeks of NFL data (~2M training samples), differing in feature engineering and entity tracking:</p>
+
+    <div class="highlight-box">
+        <p><strong>Baseline</strong>: 6 features per player, 22 players tracked<br>
+        → Test MAE: <span class="metric">4.97 yards</span></p>
+        <ul>
+            <li>Features: position (x_rel, y_rel), velocity (vx, vy), team (side), ball carrier status (is_ball_carrier)</li>
+            <li>Philosophy: Minimal feature engineering, let the model learn from raw spatial data</li>
+        </ul>
+    </div>
+
+    <div class="highlight-box">
+        <p><strong>Minimalist</strong>: 7 features per player, 22 players tracked (NO football)<br>
+        → Test MAE: <span class="metric">4.53 yards</span> (8.9% improvement)</p>
+        <ul>
+            <li>Added Feature: distanceToGoal (field position context)</li>
+            <li>Philosophy: Strategic addition of one critical game state feature</li>
+        </ul>
+    </div>
+
+    <div class="highlight-box winner-highlight">
+        <p><strong>Min+Football (winner)</strong>: 7 features per entity, 23 entities (22 players + football)<br>
+        → Test MAE: <span class="metric">4.44 yards</span> (10.7% improvement over baseline, 2.0% better than Minimalist)</p>
+        <ul>
+            <li>Same 7 features as Minimalist BUT tracks football as 23rd entity</li>
+            <li>Philosophy: Track the ball, minimal features, let attention do the rest</li>
+        </ul>
+    </div>
+
+    <div class="highlight-box">
+        <p><strong>Contextual</strong>: 11 features per entity, 23 entities (22 players + football)<br>
+        → Test MAE: <span class="metric">4.62 yards</span> (7.0% improvement over baseline)</p>
+        <ul>
+            <li>Added Features: yardsToGo, down, distanceToGoal, quarter, half_seconds_remaining, plus football tracking</li>
+            <li>Philosophy: Comprehensive game context</li>
+        </ul>
+    </div>
+
+    <p><strong>Key Insights</strong>:</p>
+    <ol>
+        <li><strong>Football tracking helps</strong>: Adding the football as a 23rd entity improves performance (4.44 vs 4.53 yards)</li>
+        <li><strong>More features hurt</strong>: Comprehensive game state (11 features) performs worse than minimal approach (7 features)</li>
+        <li><strong>Let attention learn</strong>: The Transformer discovers game context from spatial relationships</li>
+    </ol>
+
+    <hr>
+
+    <h2>Understanding MAE in Football Terms</h2>
+    <p><strong>Mean Absolute Error (MAE)</strong> measures the average distance in yards between our prediction and the actual outcome. Think of it as "how many yards off is the model's guess, on average?"</p>
+
+    <ul>
+        <li><strong>Our best model: 4.44 yards</strong> → typically within half a first down</li>
+        <li><strong>Minimalist (no football): 4.53 yards</strong> → 0.09 yards worse</li>
+        <li><strong>Baseline model: 4.97 yards</strong> → about half a yard worse than winner</li>
+    </ul>
+
+    <p>Performance varies dramatically by situation:</p>
+    <ul>
+        <li><strong>Rush plays: 2.97 yards</strong> → very accurate (within 9 feet on average)</li>
+        <li><strong>Pass plays: 5.85 yards</strong> → more uncertainty (receiver routes, QB decisions)</li>
+        <li><strong>Last 10 frames before tackle: 1.58 yards</strong> → pinpoint accuracy (within 5 feet)</li>
+    </ul>
+
+    <p>For context, being off by 4.44 yards on average means the model usually knows within a few yards where the tackle will occur—valuable for real-time decision-making and post-play analysis.</p>
+
+    <hr>
+
+    <h2>Best Model Deep Dive: Min+Football</h2>
+
+    <h3>Architecture & Training</h3>
+    <p><strong>Model Specification</strong>: Transformer M64_L4</p>
+    <ul>
+        <li>64 hidden dimensions, 4 transformer layers</li>
+        <li>Self-attention mechanism across all 23 entities (22 players + football) simultaneously</li>
+        <li>~200K trainable parameters</li>
+    </ul>
+
+    <p><strong>Features</strong> (7 per entity):</p>
+    <ul>
+        <li><strong>Spatial</strong>: x_rel, y_rel (position relative to ball carrier)</li>
+        <li><strong>Velocity</strong>: vx, vy (movement direction and speed)</li>
+        <li><strong>Context</strong>: side (team: offense/defense/neutral for football), is_ball_carrier (binary), distanceToGoal (field position)</li>
+    </ul>
+
+    <p><strong>Entities</strong>: 23 total</p>
+    <ul>
+        <li>22 players (offense + defense)</li>
+        <li>1 football (tracked as separate entity with same features)</li>
+    </ul>
+
+    <p><strong>Training Data</strong>: 18 weeks of NFL games</p>
+    <ul>
+        <li>Training: 1,994,318 samples</li>
+        <li>Validation: 429,224 samples</li>
+        <li>Test: 433,398 samples</li>
+    </ul>
+
+    <p><strong>Coordinate System</strong>: All positions normalized relative to ball carrier's starting position for consistency across plays</p>
+
+    <h3>Overall Performance</h3>
+    <p><strong>Test Set Results</strong>:</p>
+    <ul>
+        <li>MAE: <strong>4.44 yards</strong> (10.7% better than baseline, 2.0% better than Minimalist)</li>
+        <li>Exact Accuracy: 17.8% (challenging 110-class problem)</li>
+        <li>Strong Generalization: Train 4.32y → Val 4.34y → Test 4.44y (minimal overfitting)</li>
+    </ul>
+
+    <p>The model shows consistent performance across all data splits, indicating it learned generalizable patterns rather than memorizing training data.</p>
+
+    <h3>Performance by Play Type</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Play Type</th>
+                <th>MAE</th>
+                <th>Accuracy</th>
+                <th>Samples</th>
+                <th>Insight</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Rush</strong></td>
+                <td>2.97 yards</td>
+                <td>21.3%</td>
+                <td>220,064</td>
+                <td>Most predictable: defenders converge on running lanes, football location critical</td>
+            </tr>
+            <tr>
+                <td><strong>Pass</strong></td>
+                <td>5.85 yards</td>
+                <td>14.8%</td>
+                <td>357,524</td>
+                <td>Higher uncertainty: receiver routes, QB decisions, but football tracking helps</td>
+            </tr>
+            <tr>
+                <td><strong>Sack</strong></td>
+                <td>7.49 yards</td>
+                <td>10.6%</td>
+                <td>4,904</td>
+                <td>Most chaotic: QB scrambles and pocket collapses vary significantly</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p><strong>Key Finding</strong>: Rush plays are nearly 2x more predictable than pass plays. The football's trajectory is especially valuable in rush plays where its position tightly correlates with the final tackle location.</p>
+
+    <h3>Performance Over Time: Frame Position Analysis</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Phase</th>
+                <th>MAE</th>
+                <th>Accuracy</th>
+                <th>Explanation</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>First 10 frames</strong> (play start)</td>
+                <td>5.61 yards</td>
+                <td>10.3%</td>
+                <td>High uncertainty: play outcome undetermined, multiple possibilities</td>
+            </tr>
+            <tr>
+                <td><strong>Middle frames</strong></td>
+                <td>5.18 yards</td>
+                <td>14.6%</td>
+                <td>Patterns emerging: ball carrier direction, defender pursuit angles becoming clear</td>
+            </tr>
+            <tr>
+                <td><strong>Last 10 frames</strong> (near tackle)</td>
+                <td>1.58 yards</td>
+                <td>35.3%</td>
+                <td>Pinpoint accuracy: tackle location nearly certain from player and ball positions</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p><strong>Key Finding</strong>: Accuracy improves <strong>3.5x</strong> from play start to near-tackle (5.61 → 1.58 yards). The model effectively uses evolving spatial information—especially football trajectory—to refine predictions as uncertainty resolves.</p>
+
+    <h3>Performance by Key Events</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Event</th>
+                <th>MAE</th>
+                <th>Samples</th>
+                <th>Context</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Ball Snap</strong></td>
+                <td>4.63 yards</td>
+                <td>82,781</td>
+                <td>Play just starting, high uncertainty</td>
+            </tr>
+            <tr>
+                <td><strong>First Contact</strong></td>
+                <td>3.83 yards</td>
+                <td>66,699</td>
+                <td>Initial engagement, outcome narrowing</td>
+            </tr>
+            <tr>
+                <td><strong>Tackle</strong></td>
+                <td>3.79 yards</td>
+                <td>64,789</td>
+                <td>Final outcome, best accuracy</td>
+            </tr>
+            <tr>
+                <td><strong>Pass Forward</strong></td>
+                <td>5.91 yards</td>
+                <td>45,436</td>
+                <td>Ball in air, high uncertainty about catch point</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p><strong>Observation</strong>: The model achieves its best accuracy at the tackle event (3.79 yards), when both player positions and football location converge to the final outcome point.</p>
+
+    <hr>
+
+    <h2>Why Football Tracking + Minimal Features Works</h2>
+    <p>The Transformer architecture's <strong>self-attention mechanism</strong> allows it to learn complex spatial relationships directly from player and ball positions. Here's what we learned:</p>
+
+    <ul>
+        <li><strong>Football tracking matters</strong>: Adding the football as 23rd entity improved performance by 2.0% (4.44 vs 4.53 yards)
+            <ul>
+                <li>The ball's trajectory provides critical information about play outcome</li>
+                <li>Especially valuable in rush plays where ball position tightly correlates with tackle location</li>
+            </ul>
+        </li>
+        <li><strong>Strategic beats comprehensive</strong>: Adding one game state feature (distanceToGoal) improved baseline by 8.9%
+            <ul>
+                <li>Field position provides non-redundant context the model can't infer from positions alone</li>
+            </ul>
+        </li>
+        <li><strong>Diminishing returns from more features</strong>: Adding 5 game state features (Contextual model) performed 4% worse (4.62 vs 4.44 yards)
+            <ul>
+                <li>The attention mechanism already infers down-and-distance, time remaining from formations</li>
+                <li>Additional features add noise rather than signal</li>
+            </ul>
+        </li>
+    </ul>
+
+    <p><strong>Lesson</strong>: Track the ball, add minimal strategic context (field position), let the attention mechanism discover game patterns from spatial relationships.</p>
+
+    <hr>
+
+    <h2>Model Comparison: What We Learned</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Model</th>
+                <th>Features</th>
+                <th>Entities</th>
+                <th>Test MAE</th>
+                <th>Improvement</th>
+                <th>Philosophy</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Baseline</strong></td>
+                <td>6</td>
+                <td>22 players</td>
+                <td>4.97 yards</td>
+                <td>—</td>
+                <td>Minimal engineering</td>
+            </tr>
+            <tr>
+                <td><strong>Minimalist</strong></td>
+                <td>7</td>
+                <td>22 players</td>
+                <td>4.53 yards</td>
+                <td>+8.9%</td>
+                <td>Strategic feature</td>
+            </tr>
+            <tr style="background-color: #e8f5e9;">
+                <td><strong>Min+Football ✓</strong></td>
+                <td>7</td>
+                <td>23 (+ football)</td>
+                <td><strong>4.44 yards</strong></td>
+                <td><strong>+10.7%</strong></td>
+                <td>Track ball + minimal</td>
+            </tr>
+            <tr>
+                <td><strong>Contextual</strong></td>
+                <td>11</td>
+                <td>23 (+ football)</td>
+                <td>4.62 yards</td>
+                <td>+7.0%</td>
+                <td>Comprehensive context</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p><strong>Cross-Cutting Findings</strong>:</p>
+    <ol>
+        <li><strong>Football tracking provides consistent improvement</strong>: 4.44y vs 4.53y (2% better with same features)</li>
+        <li><strong>Play type hierarchy</strong>: Rush (2.97y) > Pass (5.85y) > Sack (7.49y) in predictability</li>
+        <li><strong>Time matters dramatically</strong>: 5.61 yards (early) → 1.58 yards (late) = 3.5x improvement</li>
+        <li><strong>Generalization is strong</strong>: All models show <0.15 yard gap between train and test performance</li>
+        <li><strong>Simpler wins</strong>: 7 strategic features + football beat 11 feature "kitchen sink"</li>
+    </ol>
+
+    <hr>
+
+    <h2>Key Takeaways</h2>
+    <ul>
+        <li><strong>4.44 yards average error</strong> on the best model (Min+Football) — typically within half a first down</li>
+        <li><strong>10.7% improvement</strong> over baseline by tracking football + minimal feature engineering</li>
+        <li><strong>Football tracking matters</strong>: 2% better than same features without football (4.44 vs 4.53 yards)
+            <ul><li>The ball's trajectory is critical information for predicting play outcome</li></ul>
+        </li>
+        <li><strong>Rush plays are 2x more predictable</strong> than passes (2.97 vs 5.85 yards MAE)</li>
+        <li><strong>Accuracy scales with time</strong>: Predictions improve from 5.61 yards (play start) to 1.58 yards (near tackle)</li>
+        <li><strong>Simpler is better</strong>: 7 strategic features + football beat 11 feature comprehensive approach
+            <ul><li>More features add noise when the model can already infer context from spatial relationships</li></ul>
+        </li>
+        <li><strong>Strong generalization</strong>: Minimal train/val/test performance gap shows robust pattern learning, not memorization</li>
+        <li><strong>Transformer architecture enables learning from minimal data</strong>: Self-attention captures game context without extensive manual feature engineering</li>
+    </ul>
+
+    <hr>
+
+    <h2>Limitations and Future Directions</h2>
+
+    <h3>Training Data Constraints</h3>
+    <p><strong>Single Season Data</strong>: Our models were trained on 18 weeks from a single NFL season. This limitation has several implications:</p>
+
+    <ul>
+        <li><strong>Limited tactical diversity</strong>: One season captures only a subset of offensive/defensive schemes, coaching philosophies, and play-calling patterns</li>
+        <li><strong>Team-specific biases</strong>: Models may overfit to specific team tendencies present in the training season</li>
+        <li><strong>Rule changes not captured</strong>: NFL rules evolve annually; single-season training may not generalize across rule changes</li>
+        <li><strong>Weather and field conditions</strong>: Limited variety in environmental factors (indoor vs. outdoor, weather, field types)</li>
+    </ul>
+
+    <h3>Transformer Scaling Potential</h3>
+    <p><strong>Transformers are known to scale exceptionally well with data</strong>—a key advantage over traditional architectures:</p>
+
+    <ul>
+        <li><strong>Data-hungry by design</strong>: Transformer architectures typically show continued improvement with 10x, 100x, or even 1000x more training data</li>
+        <li><strong>Self-attention learns complex patterns</strong>: With more data, the attention mechanism can discover increasingly subtle tactical patterns across diverse game situations</li>
+        <li><strong>Diminishing returns for feature engineering</strong>: As data increases, the model's ability to learn from raw positions improves, potentially eliminating the need for even minimal features like distanceToGoal</li>
+    </ul>
+
+    <p><strong>Expected improvements with multi-season data</strong>:</p>
+    <ul>
+        <li><strong>Cross-season generalization</strong>: Exposure to multiple coaching staffs, player personnel, and meta-game evolution</li>
+        <li><strong>Rare event handling</strong>: Better predictions for sacks, trick plays, and unusual formations (currently limited by small sample sizes)</li>
+        <li><strong>Temporal awareness</strong>: Learning how strategies evolve within and across seasons</li>
+        <li><strong>Transfer learning potential</strong>: Pre-training on multiple seasons could enable rapid adaptation to new seasons with minimal fine-tuning</li>
+    </ul>
+
+    <p><strong>Realistic performance ceiling</strong>: With 5-10 seasons of data (~50-100M training samples), we would expect:</p>
+    <ul>
+        <li>Test MAE potentially dropping from 4.44 to 3.5-4.0 yards (10-20% additional improvement)</li>
+        <li>Significantly better performance on rare events (sacks, trick plays)</li>
+        <li>More robust generalization to new teams, coaches, and strategic innovations</li>
+    </ul>
+
+    <p>The current 4.44-yard result represents what's achievable with limited data and minimal feature engineering. The Transformer architecture's scalability suggests substantial headroom for improvement given more training data.</p>
+
+    <hr>
+
+    <h2>Implications</h2>
+    <p>These results demonstrate that modern deep learning architectures can extract meaningful predictions from minimally processed player tracking data <strong>when the football is tracked</strong>. The 4.44-yard accuracy enables practical applications in:</p>
+
+    <ul>
+        <li><strong>In-game analytics</strong>: Real-time yard prediction as plays develop</li>
+        <li><strong>Defensive evaluation</strong>: Assessing how defensive positioning affects expected outcomes</li>
+        <li><strong>Play design analysis</strong>: Understanding which formations and movements correlate with yardage</li>
+        <li><strong>Expected yards models</strong>: Benchmarking actual vs. predicted performance</li>
+        <li><strong>Ball tracking emphasis</strong>: Results suggest sports analytics should prioritize tracking the ball/puck/object of play, not just players</li>
+    </ul>
+
+    <p>The finding that tracking the football improves performance while adding more game state features hurts suggests that <strong>future work should focus on what entities to track</strong> (ball, referees, landmarks) rather than engineering more features. The Transformer's attention mechanism is powerful enough to discover game context from spatial relationships alone.</p>
+
+    <p><strong>Investment priority</strong>: Given Transformers' scaling properties, organizations should prioritize <strong>collecting more seasons of tracking data</strong> over manual feature engineering. The architecture will extract more value from additional data than from additional features.</p>
+
+</body>
+</html>
