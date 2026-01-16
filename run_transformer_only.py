@@ -287,7 +287,7 @@ def main():
     # Step 3: Generate results summary
     if not args.skip_results:
         run_command(
-            f"{python_cmd} src/generate_results_summary.py --models-base-dir models_norm_football --prepped-data-dir data/split_prepped_data_extra",
+            f"{python_cmd} src/generate_results_summary.py --models-dir models_norm_football --prepped-data-dir data/split_prepped_data_extra",
             "Step 3: Generating results summary"
         )
     else:
@@ -296,7 +296,7 @@ def main():
     # Step 4: Pick best models
     if not args.skip_pick_best:
         run_command(
-            f"{python_cmd} src/pick_best_models.py --models-base-dir models_norm_football",
+            f"{python_cmd} src/pick_best_models.py --models-dir models_norm_football",
             "Step 4: Picking best models"
         )
     else:
