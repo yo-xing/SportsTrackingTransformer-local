@@ -206,13 +206,10 @@ def calculate_results(results_df: pl.DataFrame) -> list[dict]:
 
         row = {"split": split, "metric": "mae_yards"}
 
-        for model_type in ["zoo", "transformer"]:
-            model_df = split_df.filter(pl.col("model_type") == model_type)
-            row[model_type] = _calculate_mae_for_df(model_df)
+        # Only calculate for transformer (no zoo model in 23-entity-football branch)
+        model_df = split_df.filter(pl.col("model_type") == "transformer")
+        row["transformer"] = _calculate_mae_for_df(model_df)
 
-        row["improvement_pct"], row["improvement_yards"] = _calculate_improvement_metrics(
-            row["zoo"], row["transformer"]
-        )
         row["n_plays"] = split_df.select(pl.struct(["gameId", "playId"]).n_unique()).item()
         row["n_frames"] = split_df.select(pl.len()).item()
 
@@ -235,13 +232,10 @@ def calculate_results(results_df: pl.DataFrame) -> list[dict]:
 
         row = {"split": f"test-event-{event}", "metric": "mae_yards"}
 
-        for model_type in ["zoo", "transformer"]:
-            model_df = event_df.filter(pl.col("model_type") == model_type)
-            row[model_type] = _calculate_mae_for_df(model_df)
+        # Only calculate for transformer (no zoo model in 23-entity-football branch)
+        model_df = event_df.filter(pl.col("model_type") == "transformer")
+        row["transformer"] = _calculate_mae_for_df(model_df)
 
-        row["improvement_pct"], row["improvement_yards"] = _calculate_improvement_metrics(
-            row["zoo"], row["transformer"]
-        )
         row["n_plays"] = n_plays
         row["n_frames"] = event_df.select(pl.len()).item()
         row["_avg_frameId"] = round(event_df["frameId"].mean(), 1)  # For sorting only
@@ -304,17 +298,12 @@ def calculate_frame_difference_results(results_df: pl.DataFrame) -> tuple[list[d
 
         row = {"split": f"test-frames-before-tackle-{category}", "metric": "mae_yards"}
 
-        for model_type in ["zoo", "transformer"]:
-            model_data = cat_df.filter(pl.col("model_type") == model_type)
-            if len(model_data) > 0:
-                row[model_type] = model_data["mae_yards"].item()
+        # Only calculate for transformer (no zoo model in 23-entity-football branch)
+        model_data = cat_df.filter(pl.col("model_type") == "transformer")
+        if len(model_data) > 0:
+            row["transformer"] = model_data["mae_yards"].item()
 
-        if "zoo" in row and "transformer" in row:
-            row["improvement_pct"], row["improvement_yards"] = _calculate_improvement_metrics(
-                row["zoo"], row["transformer"]
-            )
-
-        # Get n_plays and n_frames (should be same for both models)
+        # Get n_plays and n_frames
         first_row = cat_df.row(0, named=True)
         row["n_plays"] = int(first_row["n_plays"])
         row["n_frames"] = int(first_row["n_frames"])
@@ -388,7 +377,8 @@ def find_all_model_checkpoints(require_results: bool = True) -> list[dict]:
     models_base = MODELS_BASE_DIR
     configs = []
 
-    for model_type in ["zoo", "transformer"]:
+    # Only check for transformer models (no zoo model in 23-entity-football branch)
+    for model_type in ["transformer"]:
         model_dir = models_base / model_type
         if not model_dir.exists():
             continue
@@ -570,12 +560,12 @@ def generate_model_scaling_plot(model_comparison: list[dict]) -> None:
     # Create single figure
     fig, ax = plt.subplots(1, 1, figsize=(10, 6))
 
-    # Define colors and markers
-    colors = {"zoo": "#FF7F0E", "transformer": "#1F77B4"}
-    markers = {"zoo": "s", "transformer": "o"}
+    # Define colors and markers (only transformer in 23-entity-football branch)
+    colors = {"transformer": "#1F77B4"}
+    markers = {"transformer": "o"}
 
-    # Plot: Test ADE vs FLOPs
-    for model_type in ["zoo", "transformer"]:
+    # Plot: Test ADE vs FLOPs (only transformer models)
+    for model_type in ["transformer"]:
         data = df[df["model_type"] == model_type].sort_values("inference_flops")
         ax.plot(
             data["inference_flops"],
@@ -751,30 +741,22 @@ def main():
     # Print test set summary
     test_row = next(r for r in results if r["split"] == "test")
     print(f"\nTest Set Overall:")
-    if "zoo" in test_row:
-        print(f"  Zoo:         {test_row['zoo']:.2f} yards")
     if "transformer" in test_row:
         print(f"  Transformer: {test_row['transformer']:.2f} yards")
-    if "improvement_yards" in test_row and "improvement_pct" in test_row:
-        print(f"  Improvement: {test_row['improvement_yards']:.2f} yards ({test_row['improvement_pct']:.1f}%)")
 
     print(f"\nTest Set Events:")
     for row in results:
         if row["split"].startswith("test-event-"):
             event_name = row["split"].replace("test-event-", "")
-            if "improvement_pct" in row:
-                print(f"  {event_name:20s}: {row['improvement_pct']:5.1f}% improvement")
-            elif "transformer" in row:
-                print(f"  {event_name:20s}: {row['transformer']:5.2f} yards (transformer only)")
+            if "transformer" in row:
+                print(f"  {event_name:20s}: {row['transformer']:5.2f} yards")
 
     print(f"\nTest Set Frame Differences:")
     for row in results:
         if row["split"].startswith("test-frames-before-tackle-"):
             frame_cat = row["split"].replace("test-frames-before-tackle-", "")
-            if "improvement_pct" in row:
-                print(f"  {frame_cat:15s}: {row['improvement_pct']:5.1f}% improvement")
-            elif "transformer" in row:
-                print(f"  {frame_cat:15s}: {row['transformer']:5.2f} yards (transformer only)")
+            if "transformer" in row:
+                print(f"  {frame_cat:15s}: {row['transformer']:5.2f} yards")
 
 
 if __name__ == "__main__":
