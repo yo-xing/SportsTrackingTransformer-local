@@ -419,6 +419,14 @@ def main(args):
     gridsearch = [(M, L, LR) for M, L, LR in gridsearch if not ((M == 32 and L == 8) or (M == 512 and L in [4, 8]))]
     # Add M64_L4 custom configuration
     gridsearch.append((64, 4, 1e-4))
+
+    # Filter by model dimensions if specified
+    if args.model_dims is not None:
+        allowed_dims = set(args.model_dims)
+        gridsearch = [(M, L, LR) for M, L, LR in gridsearch if M in allowed_dims]
+        print(f"Filtering to model dimensions: {sorted(allowed_dims)}")
+        print(f"Configurations after filtering: {len(gridsearch)}")
+
     if args.shuffle:
         random.shuffle(gridsearch)
     if args.reverse:
@@ -492,5 +500,9 @@ if __name__ == "__main__":
         "--model_type", type=str, default="transformer", help="Type of model to train ('transformer' or 'zoo')"
     )
     parser.add_argument("--patience", "-P", type=int, default=6, help="Early stopping patience")
+    parser.add_argument(
+        "--model-dims", type=int, nargs="+", default=None,
+        help="Filter by model dimensions (e.g., --model-dims 64 or --model-dims 32 128)"
+    )
     args = parser.parse_args()
     main(args)
