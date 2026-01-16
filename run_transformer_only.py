@@ -257,9 +257,9 @@ def main():
     # Step 2: Train transformer model
     if not args.skip_training:
         # Verify filtered datasets exist before training
-        OUTPUT_DIR = Path("data/datasets_extra_norm")
+        OUTPUT_DIR_CHECK = Path("data/datasets_extra_norm_football")
         required_files = [
-            OUTPUT_DIR / "transformer" / f"{split}_dataset.pkl"
+            OUTPUT_DIR_CHECK / "transformer" / f"{split}_dataset.pkl"
             for split in ["train", "val", "test"]
         ]
         missing_files = [f for f in required_files if not f.exists()]
