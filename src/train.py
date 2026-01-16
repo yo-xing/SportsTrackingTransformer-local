@@ -402,23 +402,28 @@ def main(args):
     """
     # Hyperparameter search space:
     # - lrs: Learning rate (1e-4 based on prior experimentation)
-    # - model_dims: Model width (32, 128, 512) - # size of internal vector representation for each player in each layer
+    # - model_dims: Model width (32, 64, 128) - # size of internal vector representation for each player in each layer
     # - num_layers: Model depth (1, 2, 4, 8) - number of stacked layers
-    # - Custom additions: M64_L4 (added to test medium-width model)
-    # - Excluded: M32_L8, M512_L4, M512_L8 (too large or inefficient)
+    # - Custom additions: M64_L4, M64_L8 (added to test medium-width model)
+    # - Excluded: M32_L8 (too deep for narrow model), M512 (removed entirely)
     #
-    # Total: 10 configurations (3 model_dims × 4 num_layers + 1 custom - 3 excluded = 10)
+    # Total: 11 configurations (2 model_dims × 4 num_layers + 2 custom - 1 excluded = 11)
 
     lrs = [1e-4]
-    model_dims = [32, 128, 512]
+    model_dims = [32, 128]
     num_layers = [1, 2, 4, 8]
 
     # Create gridsearch iterable
     gridsearch = list(product(model_dims, num_layers, lrs))
-    # Filter out M32_L8, M512_L4, and M512_L8 configurations
-    gridsearch = [(M, L, LR) for M, L, LR in gridsearch if not ((M == 32 and L == 8) or (M == 512 and L in [4, 8]))]
-    # Add M64_L4 custom configuration
-    gridsearch.append((64, 4, 1e-4))
+    # Filter out M32_L8 configuration
+    gridsearch = [(M, L, LR) for M, L, LR in gridsearch if not (M == 32 and L == 8)]
+    # Add M64 custom configurations after M32 models
+    # Insert M64_L1, M64_L2, M64_L4, M64_L8 after M32 models (before M128 models)
+    m32_count = sum(1 for M, L, LR in gridsearch if M == 32)
+    gridsearch.insert(m32_count, (64, 1, 1e-4))
+    gridsearch.insert(m32_count + 1, (64, 2, 1e-4))
+    gridsearch.insert(m32_count + 2, (64, 4, 1e-4))
+    gridsearch.insert(m32_count + 3, (64, 8, 1e-4))
     if args.shuffle:
         random.shuffle(gridsearch)
     if args.reverse:
@@ -449,10 +454,10 @@ def main(args):
 
         # Dynamic dropout based on model size to prevent overfitting
         # Larger models (more params) need more regularization
-        if M >= 512:
-            dropout = 0.4  # High dropout for very wide models (M512)
-        elif M >= 128 and L >= 4:
+        if M >= 128 and L >= 4:
             dropout = 0.35  # Medium-high dropout for large models (M128_L4, M128_L8)
+        elif M >= 64 and L >= 4:
+            dropout = 0.32  # Slightly higher dropout for M64_L4, M64_L8
         else:
             dropout = 0.3  # Standard dropout for smaller models
 
