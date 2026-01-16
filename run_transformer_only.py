@@ -205,6 +205,8 @@ def main():
     parser.add_argument("--min-epochs", type=int, default=40, help="Minimum epochs for --skip-if-trained (default: 40)")
     parser.add_argument("--device", type=int, default=0, help="GPU device to use (default: 0)")
     parser.add_argument("--patience", type=int, default=10, help="Early stopping patience (default: 10)")
+    parser.add_argument("--skip-results", action="store_true", help="Skip generating results summary")
+    parser.add_argument("--skip-pick-best", action="store_true", help="Skip picking best models")
     parser.add_argument("--use-uv", action="store_true", help="Use uv run for subprocess commands")
     args = parser.parse_args()
 
@@ -282,13 +284,32 @@ def main():
     else:
         print("\n⏭️  Skipping training (--skip-training)\n")
 
+    # Step 3: Generate results summary
+    if not args.skip_results:
+        run_command(
+            f"{python_cmd} src/generate_results_summary.py",
+            "Step 3: Generating results summary"
+        )
+    else:
+        print("\n⏭️  Skipping results summary generation (--skip-results)\n")
+
+    # Step 4: Pick best models
+    if not args.skip_pick_best:
+        run_command(
+            f"{python_cmd} src/pick_best_models.py",
+            "Step 4: Picking best models"
+        )
+    else:
+        print("\n⏭️  Skipping pick best models (--skip-pick-best)\n")
+
     print("\n" + "="*60)
     print("Pipeline Complete!")
     print("="*60 + "\n")
     print("Next steps:")
-    print("  - Check tensorboard logs: tensorboard --logdir models/transformer")
-    print("  - View results: models/transformer/M{dim}_L{layers}_LR{lr}/checkpoints/*.results.parquet")
-    print("  - Generate summary: python src/generate_results_summary.py")
+    print("  - Check tensorboard logs: tensorboard --logdir models_norm_football/transformer")
+    print("  - View results: models_norm_football/transformer/M{dim}_L{layers}_LR{lr}/checkpoints/*.results.parquet")
+    print("  - Results summary: models_norm_football/transformer/results_summary.csv")
+    print("  - Best models: models_norm_football/transformer/best_models.txt")
     print()
 
 
