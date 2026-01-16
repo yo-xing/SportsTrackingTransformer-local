@@ -181,8 +181,7 @@ def main():
         run_command(
             f"cd {repo_root} && {python_cmd} src/datasets.py "
             f"--prepped-data-dir data/split_prepped_data_extra "
-            f"--dataset-dir data/datasets_extra_gamestate_23 "
-            f"--model-types transformer",
+            f"--dataset-dir data/datasets_extra_gamestate_23",
             "Step 4a: Precomputing datasets (parquet → pkl, 11 features)"
         )
     else:
