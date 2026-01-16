@@ -122,9 +122,12 @@ joined_orig = test_orig.join(ngs_metadata, on=['gameId', 'playId', 'frameId'], h
 
 test_mirror = test_df.filter(pl.col('mirrored') == True)
 if len(test_mirror) > 0:
+    # For mirrored plays, join on gameId and playId only (no frameId match needed)
+    # But add 'event' column as null to match schema
     play_meta = ngs_metadata.select(['gameId', 'playId', 'play_type']).unique()
     joined_mirror = test_mirror.join(play_meta, on=['gameId', 'playId'], how='left')
-    joined = pl.concat([joined_orig, joined_mirror])
+    joined_mirror = joined_mirror.with_columns(pl.lit(None).alias('event'))
+    joined = pl.concat([joined_orig, joined_mirror], how="vertical_relaxed")
 else:
     joined = joined_orig
 
