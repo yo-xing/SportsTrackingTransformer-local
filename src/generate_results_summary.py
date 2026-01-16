@@ -28,8 +28,10 @@ Outputs:
 
 Usage:
     uv run python src/generate_results_summary.py
+    uv run python src/generate_results_summary.py --models-dir models_norm --prepped-data-dir data/split_prepped_data_extra --num-features 7
 """
 
+import argparse
 import json
 import re
 from pathlib import Path
@@ -46,25 +48,10 @@ from models import LitModel
 RESULTS_DIR = Path("results")
 RESULTS_DIR.mkdir(exist_ok=True)
 
-# Use Google Drive for models if available (Colab), otherwise local
-GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models")
-LOCAL_MODELS_PATH = Path("models")
-
-if GDRIVE_MODELS_PATH.parent.exists():
-    MODELS_BASE_DIR = GDRIVE_MODELS_PATH
-    print(f"Using Google Drive for models: {MODELS_BASE_DIR}")
-else:
-    MODELS_BASE_DIR = LOCAL_MODELS_PATH
-    print(f"Using local path for models: {MODELS_BASE_DIR}")
-
-MODELS_DIR = MODELS_BASE_DIR / "best_models"
-ZOO_RESULTS = MODELS_DIR / "zoo" / "best_model_results.parquet"
-TRANSFORMER_RESULTS = MODELS_DIR / "transformer" / "best_model_results.parquet"
-ZOO_CHECKPOINT = MODELS_DIR / "zoo" / "best_model.ckpt"
-TRANSFORMER_CHECKPOINT = MODELS_DIR / "transformer" / "best_model.ckpt"
-
-# Use extra data paths
-PREPPED_DATA_DIR = Path("data/split_prepped_data_extra")
+# Global config - set by parse_args()
+MODELS_BASE_DIR = None
+PREPPED_DATA_DIR = None
+NUM_FEATURES = 7  # Number of features for transformer (will be set by args)
 
 
 def generate_results_if_missing(checkpoint_path: Path, results_path: Path, model_type: str):
@@ -86,26 +73,29 @@ def generate_results_if_missing(checkpoint_path: Path, results_path: Path, model
 
 
 def load_results() -> pl.DataFrame:
-    """Load and combine results from both models, including per-frame events from tracking data."""
-    # Generate results if missing
-    if ZOO_CHECKPOINT.exists():
-        generate_results_if_missing(ZOO_CHECKPOINT, ZOO_RESULTS, "zoo")
-    if TRANSFORMER_CHECKPOINT.exists():
-        generate_results_if_missing(TRANSFORMER_CHECKPOINT, TRANSFORMER_RESULTS, "transformer")
-
+    """Load and combine results from all models, including per-frame events from tracking data."""
     print("Loading model results...")
+
+    # Find all .results.parquet files in the models directory
+    results_files = list(MODELS_BASE_DIR.glob("**/*.results.parquet"))
+
+    if not results_files:
+        raise FileNotFoundError(f"No .results.parquet files found in {MODELS_BASE_DIR}. Please train models first.")
+
+    print(f"  Found {len(results_files)} results files")
+
+    # Load and combine all results
     results_dfs = []
-    if ZOO_RESULTS.exists():
-        results_dfs.append(pl.read_parquet(ZOO_RESULTS))
-    else:
-        print("Warning: Zoo results not found, skipping")
-    if TRANSFORMER_RESULTS.exists():
-        results_dfs.append(pl.read_parquet(TRANSFORMER_RESULTS))
-    else:
-        print("Warning: Transformer results not found, skipping")
+    for results_file in results_files:
+        try:
+            df = pl.read_parquet(results_file)
+            results_dfs.append(df)
+            print(f"  Loaded: {results_file.relative_to(MODELS_BASE_DIR)}")
+        except Exception as e:
+            print(f"  Warning: Failed to load {results_file}: {e}")
 
     if not results_dfs:
-        raise FileNotFoundError("No results files found. Please train models first.")
+        raise FileNotFoundError("Failed to load any results files.")
 
     results_df = pl.concat(results_dfs, how="diagonal")
 
@@ -114,12 +104,41 @@ def load_results() -> pl.DataFrame:
     tracking_df = pl.read_parquet(f"{PREPPED_DATA_DIR}/*_features.parquet")
 
     # Join with tracking data to get per-frame events
-    results_df = results_df.join(
-        tracking_df.filter(pl.col("is_ball_carrier") == 1)
+    # Use ball carrier position when available, otherwise use first offensive player (e.g., QB)
+    ball_carrier_tracking = tracking_df.filter(pl.col("is_ball_carrier") == 1)
+
+    # For plays without ball carrier, use QB or first offensive player
+    fallback_tracking = (
+        tracking_df.filter(pl.col("side") == 1)
+        .group_by(["gameId", "playId", "frameId", "mirrored"])
+        .agg([
+            pl.col("x").filter(pl.col("position") == "QB").first().alias("x_qb"),
+            pl.col("y").filter(pl.col("position") == "QB").first().alias("y_qb"),
+            pl.col("x").first().alias("x_first"),
+            pl.col("y").first().alias("y_first"),
+            pl.col("event").first().alias("event"),
+        ])
+        .with_columns([
+            pl.coalesce(["x_qb", "x_first"]).alias("x"),
+            pl.coalesce(["y_qb", "y_first"]).alias("y"),
+        ])
         .select(["x", "y", "gameId", "playId", "frameId", "mirrored", "event"])
-        .rename({"x": "ball_carrier_x", "y": "ball_carrier_y"}),
+    )
+
+    # Combine ball carrier and fallback tracking
+    player_tracking = pl.concat([
+        ball_carrier_tracking.select(["x", "y", "gameId", "playId", "frameId", "mirrored", "event"]),
+        fallback_tracking.join(
+            ball_carrier_tracking.select(["gameId", "playId", "frameId", "mirrored"]),
+            on=["gameId", "playId", "frameId", "mirrored"],
+            how="anti",
+        ),
+    ]).rename({"x": "ball_carrier_x", "y": "ball_carrier_y"})
+
+    results_df = results_df.join(
+        player_tracking,
         on=["gameId", "playId", "frameId", "mirrored"],
-        how="inner",
+        how="left",
     )
 
     # Filter to mirrored=False to avoid double-counting predictions
@@ -138,7 +157,7 @@ def load_results() -> pl.DataFrame:
     return results_df
 
 
-def _calculate_mae_for_df(df: pl.DataFrame) -> float:
+def _calculate_mae_for_df(df: pl.DataFrame) -> float | None:
     """
     Helper to calculate MAE (Mean Absolute Error) for yards gained prediction.
 
@@ -146,12 +165,15 @@ def _calculate_mae_for_df(df: pl.DataFrame) -> float:
         df: DataFrame with columns: yards_gained, expected_yards
 
     Returns:
-        MAE in yards, rounded to 2 decimal places
+        MAE in yards, rounded to 2 decimal places, or None if df is empty
     """
+    if len(df) == 0:
+        return None
+
     mae = df.select(
         (pl.col("yards_gained") - pl.col("expected_yards")).abs().mean()
     ).item()
-    return round(mae, 2)
+    return round(mae, 2) if mae is not None else None
 
 
 def _calculate_improvement_metrics(zoo_ade: float, transformer_ade: float) -> tuple[float, float]:
@@ -352,14 +374,18 @@ def generate_frame_difference_plot(frame_diff_df: pl.DataFrame) -> None:
     print(f"  Saved: {plot_path}")
 
 
-def find_all_model_checkpoints() -> list[dict]:
+def find_all_model_checkpoints(require_results: bool = True) -> list[dict]:
     """
     Find all model checkpoints and group by configuration.
+
+    Args:
+        require_results: If True, only return checkpoints that have results files.
+                        If False, return all checkpoints.
 
     Returns:
         list[dict]: List of config dicts with model_type, model_dim, num_layers, and best checkpoint path.
     """
-    models_base = Path("models")
+    models_base = MODELS_BASE_DIR
     configs = []
 
     for model_type in ["zoo", "transformer"]:
@@ -405,7 +431,9 @@ def find_all_model_checkpoints() -> list[dict]:
             if best_checkpoint:
                 # Find corresponding results file
                 results_file = best_checkpoint.with_suffix(".results.parquet")
-                if results_file.exists():
+
+                # Add config if results exist or if we don't require them
+                if not require_results or results_file.exists():
                     configs.append(
                         {
                             "model_type": model_type,
@@ -438,7 +466,7 @@ def compute_model_metrics(checkpoint_path: str, model_type: str) -> dict:
 
     # Create dummy input shape
     if model_type == "transformer":
-        input_shape = (1, 22, 6)
+        input_shape = (1, 22, NUM_FEATURES)
     else:  # zoo
         input_shape = (1, 10, 11, 10)
 
@@ -576,11 +604,79 @@ def generate_model_scaling_plot(model_comparison: list[dict]) -> None:
     print(f"  Saved: {plot_path}")
 
 
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Generate results summary and analysis")
+    parser.add_argument("--models-dir", type=str, default="models_norm", help="Models directory (default: models_norm)")
+    parser.add_argument("--prepped-data-dir", type=str, default="data/split_prepped_data_extra",
+                       help="Prepared data directory (default: data/split_prepped_data_extra)")
+    parser.add_argument("--num-features", type=int, default=7,
+                       help="Number of input features for transformer (default: 7)")
+    parser.add_argument("--best-only", action="store_true",
+                       help="Only generate results for the checkpoint with lowest validation loss")
+    return parser.parse_args()
+
+
 def main():
     """Generate results summary."""
-    print("=" * 60)
+    global MODELS_BASE_DIR, PREPPED_DATA_DIR, NUM_FEATURES
+
+    args = parse_args()
+
+    # Set global config from args
+    NUM_FEATURES = args.num_features
+    PREPPED_DATA_DIR = Path(args.prepped_data_dir)
+
+    # Determine models base directory (check Google Drive first)
+    gdrive_models_path = Path(f"/content/drive/MyDrive/SportsTrackingTransformer/{args.models_dir}")
+    local_models_path = Path(args.models_dir)
+
+    if gdrive_models_path.exists():
+        MODELS_BASE_DIR = gdrive_models_path
+        print(f"Using Google Drive for models: {MODELS_BASE_DIR}")
+    else:
+        MODELS_BASE_DIR = local_models_path
+        print(f"Using local path for models: {MODELS_BASE_DIR}")
+
+    print(f"Using prepped data from: {PREPPED_DATA_DIR}")
+    print(f"Transformer input features: {NUM_FEATURES}")
+
+    print("\n" + "=" * 60)
     print("GENERATING RESULTS")
     print("=" * 60)
+
+    # If best-only flag is set, find and process only the best checkpoint
+    if args.best_only:
+        print("\nFinding best checkpoint (lowest validation loss)...")
+        configs = find_all_model_checkpoints(require_results=False)
+        if not configs:
+            print("No model checkpoints found!")
+            return
+
+        # Find the config with lowest validation loss
+        best_config = min(configs, key=lambda x: x["val_loss"])
+        print(f"Best model: {best_config['model_type']} "
+              f"M{best_config['model_dim']}_L{best_config['num_layers']}")
+        print(f"Validation loss: {best_config['val_loss']:.3f}")
+        print(f"Checkpoint: {best_config['checkpoint_path']}")
+
+        # Generate results only for best checkpoint
+        results_file = Path(best_config['results_path'])
+        if results_file.exists():
+            print(f"\n✓ Results already exist: {results_file}")
+            return
+
+        print(f"\nGenerating results for best checkpoint...")
+        from train import predict_model_as_df
+
+        # Generate predictions
+        preds_df = predict_model_as_df(ckpt_path=Path(best_config['checkpoint_path']), devices=[0])
+
+        # Save results
+        results_file.parent.mkdir(parents=True, exist_ok=True)
+        preds_df.write_parquet(results_file, compression="zstd", compression_level=22)
+        print(f"✓ Results saved to: {results_file}")
+        return
 
     results_df = load_results()
     results = calculate_results(results_df)
@@ -612,24 +708,73 @@ def main():
     print("COMPLETE")
     print("=" * 60)
 
+    # Print comprehensive model performance table
+    print("\n" + "=" * 60)
+    print("ALL MODELS PERFORMANCE (MAE in yards)")
+    print("=" * 60)
+
+    # Create a structured table of all models' performance
+    print(f"\n{'Model':<25} {'Train':<10} {'Val':<10} {'Test':<10} {'Val Loss':<10}")
+    print("-" * 65)
+
+    # Sort by test MAE (best first)
+    sorted_models = sorted(model_comparison, key=lambda x: x['test_mae_yards'])
+
+    for i, model in enumerate(sorted_models):
+        model_name = f"{model['model_type']}_M{model['model_dim']}_L{model['num_layers']}"
+
+        # Get train/val MAE from results
+        train_mae = val_mae = None
+        for row in results:
+            if row['split'] == 'train' and model['model_type'] in row:
+                train_mae = row[model['model_type']]
+            elif row['split'] == 'val' and model['model_type'] in row:
+                val_mae = row[model['model_type']]
+
+        train_str = f"{train_mae:.2f}" if train_mae is not None else "N/A"
+        val_str = f"{val_mae:.2f}" if val_mae is not None else "N/A"
+        test_str = f"{model['test_mae_yards']:.2f}"
+        val_loss_str = f"{model['val_loss']:.3f}"
+
+        # Mark the best model on test set
+        prefix = "→ " if i == 0 else "  "
+        print(f"{prefix}{model_name:<23} {train_str:<10} {val_str:<10} {test_str:<10} {val_loss_str:<10}")
+
+    # Explicitly state the best model
+    best_model = sorted_models[0]
+    print("\n" + "=" * 60)
+    print(f"BEST MODEL ON TEST SET: {best_model['model_type']}_M{best_model['model_dim']}_L{best_model['num_layers']}")
+    print(f"Test MAE: {best_model['test_mae_yards']:.2f} yards")
+    print(f"Validation Loss: {best_model['val_loss']:.3f}")
+    print("=" * 60)
+
     # Print test set summary
     test_row = next(r for r in results if r["split"] == "test")
     print(f"\nTest Set Overall:")
-    print(f"  Zoo:         {test_row['zoo']:.2f} yards")
-    print(f"  Transformer: {test_row['transformer']:.2f} yards")
-    print(f"  Improvement: {test_row['improvement_yards']:.2f} yards ({test_row['improvement_pct']:.1f}%)")
+    if "zoo" in test_row:
+        print(f"  Zoo:         {test_row['zoo']:.2f} yards")
+    if "transformer" in test_row:
+        print(f"  Transformer: {test_row['transformer']:.2f} yards")
+    if "improvement_yards" in test_row and "improvement_pct" in test_row:
+        print(f"  Improvement: {test_row['improvement_yards']:.2f} yards ({test_row['improvement_pct']:.1f}%)")
 
     print(f"\nTest Set Events:")
     for row in results:
         if row["split"].startswith("test-event-"):
             event_name = row["split"].replace("test-event-", "")
-            print(f"  {event_name:20s}: {row['improvement_pct']:5.1f}% improvement")
+            if "improvement_pct" in row:
+                print(f"  {event_name:20s}: {row['improvement_pct']:5.1f}% improvement")
+            elif "transformer" in row:
+                print(f"  {event_name:20s}: {row['transformer']:5.2f} yards (transformer only)")
 
     print(f"\nTest Set Frame Differences:")
     for row in results:
         if row["split"].startswith("test-frames-before-tackle-"):
             frame_cat = row["split"].replace("test-frames-before-tackle-", "")
-            print(f"  {frame_cat:15s}: {row['improvement_pct']:5.1f}% improvement")
+            if "improvement_pct" in row:
+                print(f"  {frame_cat:15s}: {row['improvement_pct']:5.1f}% improvement")
+            elif "transformer" in row:
+                print(f"  {frame_cat:15s}: {row['transformer']:5.2f} yards (transformer only)")
 
 
 if __name__ == "__main__":
