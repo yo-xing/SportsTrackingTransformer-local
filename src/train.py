@@ -82,20 +82,20 @@ def get_optimal_dataloader_config():
         batch_size_multiplier = 1.0
         print("Using A100-optimized settings: 12/10 workers, standard batch sizes")
     elif total_ram_gb >= 48:  # L4 instance (53GB) or similar
-        num_workers_train = 6
-        num_workers_pred = 4
-        batch_size_multiplier = 0.75
-        print("Using L4-optimized settings: 6/4 workers, reduced batch sizes")
-    elif total_ram_gb >= 24:  # Mid-tier instance
         num_workers_train = 4
-        num_workers_pred = 3
-        batch_size_multiplier = 0.5
-        print("Using mid-tier settings: 4/3 workers, reduced batch sizes")
-    else:  # Low RAM instance (< 24GB)
-        num_workers_train = 2
         num_workers_pred = 2
         batch_size_multiplier = 0.5
-        print("Using low-memory settings: 2/2 workers, reduced batch sizes")
+        print("Using L4-optimized settings: 4/2 workers, 50% batch sizes")
+    elif total_ram_gb >= 24:  # Mid-tier instance
+        num_workers_train = 3
+        num_workers_pred = 2
+        batch_size_multiplier = 0.4
+        print("Using mid-tier settings: 3/2 workers, 40% batch sizes")
+    else:  # Low RAM instance (< 24GB)
+        num_workers_train = 2
+        num_workers_pred = 1
+        batch_size_multiplier = 0.3
+        print("Using low-memory settings: 2/1 workers, 30% batch sizes")
 
     return {
         'num_workers_train': num_workers_train,
