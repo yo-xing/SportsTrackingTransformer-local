@@ -35,16 +35,8 @@ from shutil import copy
 
 from train import get_epoch_val_loss_from_ckpt
 
-# Use Google Drive for models if available (Colab), otherwise local
-GDRIVE_MODELS_PATH = Path("/content/drive/MyDrive/SportsTrackingTransformer/models")
-LOCAL_MODELS_PATH = Path("models")
-
-if GDRIVE_MODELS_PATH.parent.exists():
-    MODELS_PATH = GDRIVE_MODELS_PATH
-    print(f"Using Google Drive for models: {MODELS_PATH}")
-else:
-    MODELS_PATH = LOCAL_MODELS_PATH
-    print(f"Using local path for models: {MODELS_PATH}")
+# Global config - set by parse_args()
+MODELS_BASE_DIR = None
 
 
 def find_best_checkpoint(root_dir: Path) -> dict[str, Path]:
@@ -88,9 +80,22 @@ def main(args):
     This function finds the best checkpoints for each model type, copies them
     to a designated directory, and renames them for consistency.
     """
-    # Set up directories - use MODELS_PATH which handles Colab/local automatically
-    root_dir = MODELS_PATH
-    out_root_dir = MODELS_PATH / "best_models"
+    global MODELS_BASE_DIR
+
+    # Determine models base directory (check Google Drive first)
+    gdrive_models_path = Path(f"/content/drive/MyDrive/SportsTrackingTransformer/{args.models_dir}")
+    local_models_path = Path(args.models_dir)
+
+    if gdrive_models_path.exists():
+        MODELS_BASE_DIR = gdrive_models_path
+        print(f"Using Google Drive for models: {MODELS_BASE_DIR}")
+    else:
+        MODELS_BASE_DIR = local_models_path
+        print(f"Using local path for models: {MODELS_BASE_DIR}")
+
+    # Set up directories
+    root_dir = MODELS_BASE_DIR
+    out_root_dir = MODELS_BASE_DIR / "best_models"
 
     # Find best checkpoints
     best_checkpoints = find_best_checkpoint(root_dir)
@@ -122,6 +127,6 @@ def main(args):
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Select and copy the best performing models.")
-    # Add any command-line arguments if needed
+    parser.add_argument("--models-dir", type=str, default="models_norm", help="Models directory (default: models_norm)")
     args = parser.parse_args()
     main(args)
