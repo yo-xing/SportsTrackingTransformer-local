@@ -201,6 +201,7 @@ def main():
     parser.add_argument("--skip-existing", action="store_true", help="Skip training models with existing checkpoints")
     parser.add_argument("--skip-if-trained", action="store_true", help="Skip training models with checkpoints >= min_epochs")
     parser.add_argument("--skip-l1", action="store_true", help="Skip training all L1 (1-layer) models")
+    parser.add_argument("--skip-models", type=str, default="", help="Comma-separated list of models to skip (e.g., 'M32_L2,M64_L4')")
     parser.add_argument("--min-epochs", type=int, default=40, help="Minimum epochs for --skip-if-trained (default: 40)")
     parser.add_argument("--device", type=int, default=0, help="GPU device to use (default: 0)")
     parser.add_argument("--patience", type=int, default=10, help="Early stopping patience (default: 10)")
@@ -210,6 +211,7 @@ def main():
     skip_existing_flag = "--skip-existing" if args.skip_existing else ""
     skip_if_trained_flag = f"--skip-if-trained --min-epochs {args.min_epochs}" if args.skip_if_trained else ""
     skip_l1_flag = "--skip-l1" if args.skip_l1 else ""
+    skip_models_flag = f"--skip-models {args.skip_models}" if args.skip_models else ""
     python_cmd = "uv run python" if args.use_uv else "python"
 
     # --skip-precompute is an alias for --skip-filter
@@ -274,7 +276,7 @@ def main():
             sys.exit(1)
 
         run_command(
-            f"{python_cmd} src/train.py --model_type transformer --device {args.device} --patience {args.patience} {skip_existing_flag} {skip_if_trained_flag} {skip_l1_flag}",
+            f"{python_cmd} src/train.py --model_type transformer --device {args.device} --patience {args.patience} {skip_existing_flag} {skip_if_trained_flag} {skip_l1_flag} {skip_models_flag}",
             "Step 2: Training transformer model"
         )
     else:

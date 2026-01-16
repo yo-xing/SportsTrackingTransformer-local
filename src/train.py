@@ -430,6 +430,18 @@ def main(args):
         gridsearch = [(M, L, LR) for M, L, LR in gridsearch if L != 1]
         print(f"Skipping L1 models - {len(gridsearch)} configurations remaining")
 
+    # Filter out specific models if requested
+    if args.skip_models:
+        skip_list = [s.strip() for s in args.skip_models.split(',')]
+        original_count = len(gridsearch)
+        gridsearch = [
+            (M, L, LR) for M, L, LR in gridsearch
+            if f"M{M}_L{L}" not in skip_list
+        ]
+        skipped_count = original_count - len(gridsearch)
+        if skipped_count > 0:
+            print(f"Skipping {skipped_count} specific model(s): {', '.join(skip_list)} - {len(gridsearch)} configurations remaining")
+
     if args.shuffle:
         random.shuffle(gridsearch)
     if args.reverse:
@@ -500,6 +512,7 @@ if __name__ == "__main__":
     parser.add_argument("--shuffle", "-S", action="store_true", help="Shuffle the hyperparameter gridsearch")
     parser.add_argument("--reverse", "-R", action="store_true", help="Reverse the hyperparameter gridsearch")
     parser.add_argument("--skip-l1", action="store_true", help="Skip training all L1 (1-layer) models")
+    parser.add_argument("--skip-models", type=str, default="", help="Comma-separated list of models to skip (e.g., 'M32_L2,M64_L4')")
     parser.add_argument(
         "--model_type", type=str, default="transformer", help="Type of model to train ('transformer' or 'zoo')"
     )
