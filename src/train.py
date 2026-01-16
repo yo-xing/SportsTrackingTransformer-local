@@ -424,6 +424,12 @@ def main(args):
     gridsearch.insert(m32_count + 1, (64, 2, 1e-4))
     gridsearch.insert(m32_count + 2, (64, 4, 1e-4))
     gridsearch.insert(m32_count + 3, (64, 8, 1e-4))
+
+    # Filter out L1 models if requested
+    if args.skip_l1:
+        gridsearch = [(M, L, LR) for M, L, LR in gridsearch if L != 1]
+        print(f"Skipping L1 models - {len(gridsearch)} configurations remaining")
+
     if args.shuffle:
         random.shuffle(gridsearch)
     if args.reverse:
@@ -493,6 +499,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--shuffle", "-S", action="store_true", help="Shuffle the hyperparameter gridsearch")
     parser.add_argument("--reverse", "-R", action="store_true", help="Reverse the hyperparameter gridsearch")
+    parser.add_argument("--skip-l1", action="store_true", help="Skip training all L1 (1-layer) models")
     parser.add_argument(
         "--model_type", type=str, default="transformer", help="Type of model to train ('transformer' or 'zoo')"
     )
