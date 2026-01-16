@@ -20,7 +20,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # Paths (adjust for your environment)
 MODELS_DIR = Path('/content/drive/MyDrive/SportsTrackingTransformer/models_norm_football')
 NGS_DATA_DIR = Path('/content/drive/MyDrive/NGS/NFL/REG/')
-PREPPED_DATA_PATH = Path('/content/drive/MyDrive/NewDataSportsTrackingTransformer_cache_7feat_norm_football')
+PREPPED_DATA_PATH = Path('/content/drive/MyDrive/ExtraDataSportsTrackingTransformer_cache_gamestate_norm')
 
 PLAY_TYPES = ['play_type_pass', 'play_type_rush', 'play_type_sack']
 MIN_YARDS = -10
@@ -677,7 +677,7 @@ best_plays_df = pl.concat(best_plays)
 print(f"\n✓ Selected {len(best_plays_df)} plays total")
 
 print("\nStep 7: Loading tracking data for visualization...")
-# Load the prepped tracking data
+# Load the prepped tracking data from gamestate_norm cache
 tracking_path = PREPPED_DATA_PATH / "test_features.parquet"
 if not tracking_path.exists():
     print(f"❌ Tracking data not found: {tracking_path}")
@@ -685,6 +685,10 @@ if not tracking_path.exists():
 
 tracking_df = pl.read_parquet(tracking_path)
 print(f"✓ Loaded tracking data: {len(tracking_df):,} frames")
+
+# Note: gamestate_norm has extra columns (yardsToGo, down, quarter, half_seconds_remaining)
+# The visualization function will use what it needs - no filtering required
+# since the animate function accesses columns by name, not position
 
 # Add expected_yards column to joined data for visualization
 joined = joined.with_columns(pl.col('pred_yards').alias('expected_yards'))
