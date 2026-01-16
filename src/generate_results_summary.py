@@ -718,6 +718,46 @@ def main():
     print("COMPLETE")
     print("=" * 60)
 
+    # Print comprehensive model performance table
+    print("\n" + "=" * 60)
+    print("ALL MODELS PERFORMANCE (MAE in yards)")
+    print("=" * 60)
+
+    # Create a structured table of all models' performance
+    print(f"\n{'Model':<25} {'Train':<10} {'Val':<10} {'Test':<10} {'Val Loss':<10}")
+    print("-" * 65)
+
+    # Sort by test MAE (best first)
+    sorted_models = sorted(model_comparison, key=lambda x: x['test_mae_yards'])
+
+    for i, model in enumerate(sorted_models):
+        model_name = f"{model['model_type']}_M{model['model_dim']}_L{model['num_layers']}"
+
+        # Get train/val MAE from results
+        train_mae = val_mae = None
+        for row in results:
+            if row['split'] == 'train' and model['model_type'] in row:
+                train_mae = row[model['model_type']]
+            elif row['split'] == 'val' and model['model_type'] in row:
+                val_mae = row[model['model_type']]
+
+        train_str = f"{train_mae:.2f}" if train_mae is not None else "N/A"
+        val_str = f"{val_mae:.2f}" if val_mae is not None else "N/A"
+        test_str = f"{model['test_mae_yards']:.2f}"
+        val_loss_str = f"{model['val_loss']:.3f}"
+
+        # Mark the best model on test set
+        prefix = "→ " if i == 0 else "  "
+        print(f"{prefix}{model_name:<23} {train_str:<10} {val_str:<10} {test_str:<10} {val_loss_str:<10}")
+
+    # Explicitly state the best model
+    best_model = sorted_models[0]
+    print("\n" + "=" * 60)
+    print(f"BEST MODEL ON TEST SET: {best_model['model_type']}_M{best_model['model_dim']}_L{best_model['num_layers']}")
+    print(f"Test MAE: {best_model['test_mae_yards']:.2f} yards")
+    print(f"Validation Loss: {best_model['val_loss']:.3f}")
+    print("=" * 60)
+
     # Print test set summary
     test_row = next(r for r in results if r["split"] == "test")
     print(f"\nTest Set Overall:")
